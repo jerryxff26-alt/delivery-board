@@ -746,3 +746,18 @@ test('updateCard sets and clears description', () => {
   assert.equal(state.cards[0].description, undefined)
   assert.ok(!('description' in state.cards[0]))
 })
+
+test('auto logs keep English text and structured event for display localization', () => {
+  let state = createProject({ customer: 'ACME', template: 'lite' })
+  state = addCard(state, { title: 'API', stage: 'backlog', owner: 'Ada' })
+  state = moveCard(state, { cardId: 'c1', toStage: 'doing', note: 'go' })
+  const handoff = state.logs.at(-1)
+  assert.equal(handoff.type, 'handoff')
+  assert.equal(handoff.text, '"API" moved from Backlog → Doing: go')
+  assert.deepEqual(handoff.event, {
+    kind: 'move', title: 'API', from: 'Backlog', to: 'Doing', fromId: 'backlog', toId: 'doing', note: 'go',
+  })
+  state = archiveCard(state, { cardId: 'c1' })
+  assert.equal(state.logs.at(-1).event.kind, 'archive')
+  assert.equal(state.logs.at(-1).text, '"API" archived')
+})

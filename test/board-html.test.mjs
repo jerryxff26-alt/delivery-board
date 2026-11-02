@@ -380,3 +380,35 @@ test('cards show muted DoD progress and detail lists checkable items', () => {
   assert.doesNotMatch(offline, /data-action="dod-check"/)
   assert.match(offline, /class="dod-item done"/)
 })
+
+test('detail history localizes auto handoff/decision text; legacy English still works', () => {
+  let state = createProject({ customer: '蒂芙尼', template: 'lite' })
+  state = addCard(state, { title: '会员积分兑换页', stage: 'backlog', owner: '小林' })
+  state = moveCard(state, { cardId: 'c1', toStage: 'doing', note: '需求已确认，进入开发' })
+  assert.equal(state.logs.at(-1).event.kind, 'move')
+  assert.match(state.logs.at(-1).text, /moved from Backlog → Doing/)
+  const zh = renderCardDetail(state.cards[0], state, boardStrings('zh-CN'), { canEdit: true })
+  assert.match(zh, /「会员积分兑换页」从 Backlog 移到 Doing：需求已确认，进入开发/)
+  assert.doesNotMatch(zh, /moved from/)
+  const en = renderCardDetail(state.cards[0], state, boardStrings('en'), { canEdit: true })
+  assert.match(en, /&quot;会员积分兑换页&quot; moved from Backlog → Doing: 需求已确认，进入开发/)
+
+  // Legacy entry without event still localizes at display time.
+  const legacyState = {
+    ...state,
+    logs: [{
+      ts: '2026-11-01T09:00:00.000Z',
+      type: 'handoff',
+      cardId: 'c1',
+      text: '"会员积分兑换页" moved from Backlog → Doing: 旧记录',
+    }],
+  }
+  const legacyZh = renderCardDetail(legacyState.cards[0], legacyState, boardStrings('zh'), { canEdit: false })
+  assert.match(legacyZh, /「会员积分兑换页」从 Backlog 移到 Doing：旧记录/)
+  assert.doesNotMatch(legacyZh, /moved from/)
+
+  state = archiveCard(state, { cardId: 'c1' })
+  const archZh = renderCardDetail(state.cards[0], state, boardStrings('zh'), { canEdit: false })
+  assert.match(archZh, /「会员积分兑换页」已归档/)
+  assert.doesNotMatch(archZh, /"会员积分兑换页" archived/)
+})
