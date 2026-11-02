@@ -66,12 +66,14 @@ dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 
 ## 你能得到什么
 
-- **阶段流水线 + 卡片**：每张卡有负责人、可选描述、截止日期、验收标准和完成定义（DoD）。初始化后仍可增删改阶段（删除时若该阶段仍有卡片，需先 `migrate_to` 迁走）。
+- **阶段流水线 + 卡片**：每张卡有负责人、可选描述、可选 `start`/`due` 日期、验收标准和可勾选的完成定义（DoD）清单。初始化后仍可增删改阶段（删除时若该阶段仍有卡片，需先 `migrate_to` 迁走）。
 - **交接审计**：卡片跨阶段移动时自动记录交接（谁、从哪到哪、备注）。
 - **周报**：生成 Markdown 客户周报：流水线快照、**本周已交付**（进入末级阶段或归档）、交接、未关闭风险，以及**本周已消化风险**。可选 `next_week` 笔记会输出为 **Next bets（下周投注）**；为空则省略。
 - **软 WIP 上限**：阶段可选 `wipLimit`（看板风格）。看板与移动反馈会提示超限，但**从不拦截**移动。
-- **本地可编辑看板**：`/delivery Open the editable board` 在 `127.0.0.1` 上提供鼠标拖拽看板，保存回同一份交付状态；归档/恢复、风险/阻塞记录，以及可勾选的阶段检查清单均可在看板操作。无障碍回退：编辑卡片里的 Stage。看板界面文案会跟随浏览器语言（中文环境优先 zh-CN）。
-- **时间线视图**：按真实日历日期展示每张卡片的甘特条（创建 → 各阶段交接 → 上线 / 归档 / 今天），带“今天”标线、周/月网格线、◆ 截止标记（逾期为红色），没有日期的卡片单独列出。与看板共用搜索和负责人筛选，点击标题即可编辑；浅色/深色主题跟随系统。
+- **本地可编辑看板**：`/delivery Open the editable board` 在 `127.0.0.1` 上提供鼠标拖拽看板，保存回同一份交付状态；归档/恢复、风险/阻塞记录，以及卡片上的 DoD 勾选清单均可在看板操作。无障碍回退：编辑卡片里的 Stage。看板界面文案会跟随浏览器语言（中文环境优先 zh-CN）。
+- **整板归档**：`archive-board` 将当前状态（卡片、日志、风险）写入同目录 `delivery-archive/<YYYY-MM-DD>-<slug>.json`，再把 `delivery.json` 重置为空板（保留流水线/模板/标题）。用 `open --file …` 或 `html --file …` 只读查看归档。
+- **Timeline**：日历轴甘特；同时有 `start` 与 `due` 时画 start→due 条带，仅有 due 时保留 ◆ 标记。
+- **时间线视图**：按真实日历日期展示每张卡片的甘特条（创建 → 各阶段交接 → 上线 / 归档 / 今天）。同时有 `start` 与 `due` 时画 start→due 条带，仅有 due 时保留 ◆ 标记；没有日期的卡片单独列出。与看板共用搜索和负责人筛选，点击标题即可编辑；浅色/深色主题跟随系统。
 - **离线 HTML 快照**：单个只读文件，没装 DSH 的同事也能打开。
 
 ![宽屏简洁四列看板（Lite：Backlog→Live，虚构 ACME 卡片）](docs/screenshots/board.jpg)
@@ -100,6 +102,10 @@ npx github:jerryxff26-alt/delivery-board board
 npx github:jerryxff26-alt/delivery-board open
 npx github:jerryxff26-alt/delivery-board weekly 2026-10-20
 npx github:jerryxff26-alt/delivery-board html
+npx github:jerryxff26-alt/delivery-board dod add c1 "PR 已审"
+npx github:jerryxff26-alt/delivery-board dod check c1 0
+npx github:jerryxff26-alt/delivery-board archive-board
+npx github:jerryxff26-alt/delivery-board open --file delivery-archive/2026-11-02-demo.json
 ```
 
 npm 上架后，同样命令可写成 `npx dsh-delivery-board …`。
@@ -144,13 +150,13 @@ dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 
 `/delivery` skill 会先读仓库上下文、找缺口，再提出阶段与卡片方案；得到确认后才通过 `delivery_*` 工具写入。**模型负责推理；工具负责落盘。**
 
-| 模板 | 阶段 | 阶段检查清单 |
-|---|---|---|
-| **`lite`（轻量流水线）** — 推荐快速开始 | Backlog → Doing → Review → Live | 无 |
-| `default`（ToB 交付流水线） | Client Requirements → BA Analysis → TL Design → Development → Testing → DevSecOps Launch → Live | 每阶段 1–2 个（如验收标准冻结、安全扫描通过） |
-| `governance`（治理型交付流水线） | Plan → Analyze → Design → Build → Test → Deploy → Live | 侧重质量/风险/安全签核（如回滚方案就绪） |
+| 模板 | 阶段 |
+|---|---|
+| **`lite`（轻量流水线）** — 推荐快速开始 | Backlog → Doing → Review → Live |
+| `default`（ToB 交付流水线） | Client Requirements → BA Analysis → TL Design → Development → Testing → DevSecOps Launch → Live |
+| `governance`（治理型交付流水线） | Plan → Analyze → Design → Build → Test → Deploy → Live |
 
-可通过 `stages` 参数完全自定义阶段。阶段检查清单是**可勾选跟踪的清单**，持久化在交付状态中，**不会强制拦截**卡片移动。除非明确需要更长的 ToB / 治理流水线，优先用 `lite`。
+可通过 `stages` 参数完全自定义阶段。旧文件若仍含阶段 `gates` / `gateDone`，加载时会静默丢弃。除非明确需要更长的 ToB / 治理流水线，优先用 `lite`。
 
 ## 工具
 
@@ -159,11 +165,11 @@ dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 | 工具 | 作用 |
 |---|---|
 | `delivery_init` | 初始化（优先 `lite`；或 `default` / `governance` / 自定义阶段） |
-| `delivery_card` | 新增卡片（可含描述 description） |
+| `delivery_card` | 新增卡片（可选 start/due、描述、AC、DoD 清单） |
 | `delivery_move` | 跨阶段移动并记录交接；同阶段只改负责人时记为决策 |
 | `delivery_board` | 文本看板 |
 | `delivery_open` | 本地可编辑看板 URL |
-| `delivery_update` | 修改卡片信息（含描述；不移动） |
+| `delivery_update` | 修改卡片信息（含 start/due、描述、DoD；不移动） |
 | `delivery_log` | 记录进展 / 风险 / 阻塞 / 决策 |
 | `delivery_weekly` | 客户周报（Markdown）：已交付 / 交接 / 风险 / Next bets |
 
@@ -172,9 +178,10 @@ dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 | 工具 | 作用 |
 |---|---|
 | `delivery_archive` / `delivery_restore` | 归档 / 恢复到原阶段 |
+| `delivery_archive_board` | 整板快照到 `delivery-archive/…` 后重置空板（保留流水线） |
+| `delivery_dod_add` / `delivery_dod_check` | 追加 DoD 清单项 / 勾选或取消（不拦截移动） |
 | `delivery_board_html` | 只读离线 HTML 快照 |
 | `delivery_resolve` | 按 logs 下标将未关闭的风险/阻塞标记为已解决 |
-| `delivery_gate` | 勾选/切换阶段检查清单项（可跟踪，非硬拦截） |
 | `delivery_stage_add` / `delivery_stage_update` / `delivery_stage_remove` | 初始化后演进流水线（有卡片时删除需 `migrate_to`；阶段可设软 `wip_limit`） |
 
 ## 团队协作与安全
@@ -206,7 +213,7 @@ DSH_CLI="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/d
 - 插件契约 `name / inject / Config / apply`；工具经 `defineTool`；捆绑的 `skills/delivery/SKILL.md` 经 `ctx.skills.register` 注册。工具输出渲染为 `ContentBlock[]`。
 - 领域逻辑（`lib/delivery.js`）与 HTML 渲染（`lib/board-html.js`）为纯函数；写入都走 `lib/store.js`。DSH 插件使用 `ctx.fs`；独立 CLI 通过 `lib/node-fs.js` + `lib/standalone.js` 使用同一套 store 契约。
 - 周报覆盖从 `week_start` 起连续七个本地日历日（默认本周一）。**本周已交付** = 该窗口内进入末级阶段的交接，或归档；未关闭风险单独列出；**本周已消化风险**按窗口内的 `resolvedAt`。`next_week` 有内容时输出 **Next bets** 节。
-- 阶段检查清单为可跟踪清单（`gateDone`），**不**拦截移动。
+- 每张卡的 **DoD** 为可勾选清单（`{text, done, doneBy?, doneAt?}`）；勾选**不**拦截移动。旧版字符串 DoD 会在加载时迁移。
 - 软 **WIP 上限**（`wipLimit` / 工具字段 `wip_limit`）为阶段可选项；超限只在看板与移动反馈中警告，从不拒绝移动。
 - 初始化后可用工具或 `/delivery-admin` 增删改阶段；删除仍有卡片的阶段必须提供 `migrate_to`。
 - HTML 中用户内容均转义（有测试覆盖）。
@@ -222,7 +229,7 @@ DSH_CLI="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/d
 
 硬产品边界——本项目保持「本地 / 仓内交付看板」：
 
-- 硬拦截关卡或硬 WIP（不做流程引擎）
+- 硬拦截 DoD 或硬 WIP（不做流程引擎）
 - 多项目 / 多 workspace 汇总或组织级 portfolio
 - 云端通知、邮件/IM 推送、账号与 SSO
 - 自定义字段泛滥 / 多种 issue type 体系
@@ -238,9 +245,9 @@ DSH_CLI="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/d
 ## 已知限制
 
 - **独立 CLI** 只需 Node ≥20（现在用 `npx github:jerryxff26-alt/delivery-board`；npm 上架后可用 `npx dsh-delivery-board`）。DSH 插件路径为开发者预览：`engines.dsh >=0.2.0-rc.2 <0.3.0`；peers `@deepseek-ai/dsh-tools >=0.2.0-rc.2 <0.3.0`、`@deepseek-ai/schemastery ~3.18.5`（由宿主提供，optional）。已在 DSH 0.2.1-rc.2 冒烟验证；此前在 0.2.0-rc.2 验证过。
-- 无甘特排期、自动批量归档、硬拦截关卡/WIP，或实时多用户同步。
+- 无完整甘特资源排期、硬拦截 DoD/WIP，或实时多用户同步。整板归档是有意的快照+重置，不是自动批量归档。
 - 拖拽（以及编辑 → 阶段回退）在本地浏览器 harness 中检查过；不做完整键盘/移动端/WCAG 声明。
-- 阶段检查清单与 WIP 上限只是软信号；移动卡片不要求清单全部勾选，也不要求 WIP 未超限。
+- DoD 清单与 WIP 上限只是软信号；移动卡片不要求 DoD 全部勾选，也不要求 WIP 未超限。
 - 空列与未初始化项目只指向**一个**下一步（`init` / `delivery_init` / `/delivery …`，或看板上的「新建卡片」）。
 
 ## 许可证

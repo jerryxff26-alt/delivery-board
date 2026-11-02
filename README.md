@@ -66,12 +66,13 @@ If this saves your team a standup or a messy weekly paste, a [⭐ star](https://
 
 ## What you get
 
-- **Stage pipeline + cards** — each card has an owner, optional description, due date, acceptance criteria and Definition of Done (DoD). Stages can be added, renamed or removed after init (removing refuses while cards remain unless you migrate them).
+- **Stage pipeline + cards** — each card has an owner, optional description, optional `start`/`due` dates, acceptance criteria and a checkable Definition of Done (DoD) checklist. Stages can be added, renamed or removed after init (removing refuses while cards remain unless you migrate them).
 - **Handoff audit trail** — moving a card to another stage records who handed what to whom, automatically.
 - **Weekly report** — a Markdown client report: pipeline snapshot, **shipped this week** (arrived at the terminal stage or archived), handoffs, open risks, and **risks resolved this week**. Optional `next_week` notes appear as **Next bets** (omitted when empty).
 - **Soft WIP limits** — optional per-stage `wipLimit` (Kanban-style). The board and move responses warn when a stage is over; moves are never blocked.
-- **Local editable board** — ask `/delivery Open the editable board`; the tool serves a mouse drag-and-drop board on `127.0.0.1` that saves back to the same delivery state. Archive/restore, risk/blocker logging, and trackable stage checklists are available on the board. Accessibility fallback: Edit → Stage. Board chrome follows the browser locale (zh-CN when appropriate).
-- **Timeline view** — a calendar-axis Gantt of every card: bars follow real dates (created → each stage handoff → shipped / archived / today), with a today line, week and month gridlines, ◆ due markers (red when overdue), and a tray for cards with no dates yet. Same search and owner filters as the kanban; click a title to edit. Light and dark themes follow the OS.
+- **Local editable board** — ask `/delivery Open the editable board`; the tool serves a mouse drag-and-drop board on `127.0.0.1` that saves back to the same delivery state. Archive/restore, risk/blocker logging, and per-card DoD checklists are available on the board. Accessibility fallback: Edit → Stage. Board chrome follows the browser locale (zh-CN when appropriate).
+- **Timeline view** — a calendar-axis Gantt of every card: bars follow real dates (created → each stage handoff → shipped / archived / today). When both `start` and `due` are set, a schedule bar spans start→due; due-only cards keep the ◆ marker. Same search and owner filters as the kanban; click a title to edit. Light and dark themes follow the OS.
+- **Whole-board archive** — `archive-board` snapshots the current state (cards, logs, risks) to `delivery-archive/<YYYY-MM-DD>-<slug>.json` next to `delivery.json`, then resets an empty board with the same pipeline/template/title. Reopen an archive read-only with `open --file …` or `html --file …`.
 - **Offline HTML snapshot** — a single read-only file teammates without DSH can open.
 
 ![Full-width editable delivery board showing the lite four-column pipeline with synthetic ACME cards](docs/screenshots/board.jpg)
@@ -102,6 +103,10 @@ npx github:jerryxff26-alt/delivery-board board
 npx github:jerryxff26-alt/delivery-board open
 npx github:jerryxff26-alt/delivery-board weekly 2026-10-20
 npx github:jerryxff26-alt/delivery-board html
+npx github:jerryxff26-alt/delivery-board dod add c1 "PR reviewed"
+npx github:jerryxff26-alt/delivery-board dod check c1 0
+npx github:jerryxff26-alt/delivery-board archive-board
+npx github:jerryxff26-alt/delivery-board open --file delivery-archive/2026-11-02-demo.json
 ```
 
 After npm publish, the same commands work as `npx dsh-delivery-board …`.
@@ -127,7 +132,7 @@ Command shape matches `/delivery-admin` in the DSH plugin. `open` keeps the proc
 
 **Calmer board UI (v0.2.4):** softer palette, thin muted stage accents, roomier cards, AC/DoD as quiet chips, Edit/Archive/Copy behind a ⋯ menu.
 
-**Less friction (v0.2.3):** stages/cards accept **id or name/title** (case-insensitive, unique; errors list candidates). Positional CLI works: `init ACME lite`, `card API doing Ada`, `move API review`. Board gates & audit start collapsed; open risks stay visible.
+**Less friction (v0.2.3):** stages/cards accept **id or name/title** (case-insensitive, unique; errors list candidates). Positional CLI works: `init ACME lite`, `card API doing Ada`, `move API review`. Open risks stay visible on the board.
 
 ### Model-led skill (normal workflow)
 
@@ -174,13 +179,13 @@ For linked desktop development, fully quit and reopen DSH after updating the plu
 
 ## Pipeline templates
 
-| Template | Stages | Stage checklist |
-|---|---|---|
-| **`lite` (Lite Pipeline)** — recommended quickstart | Backlog → Doing → Review → Live | None |
-| `default` (ToB Delivery Pipeline) | Client Requirements → BA Analysis → TL Design → Development → Testing → DevSecOps Launch → Live | 1–2 per stage (e.g. acceptance criteria frozen, security scan passed) |
-| `governance` (Governance Pipeline) | Plan → Analyze → Design → Build → Test → Deploy → Live | Quality / risk / security sign-offs (e.g. rollback plan ready) |
+| Template | Stages |
+|---|---|
+| **`lite` (Lite Pipeline)** — recommended quickstart | Backlog → Doing → Review → Live |
+| `default` (ToB Delivery Pipeline) | Client Requirements → BA Analysis → TL Design → Development → Testing → DevSecOps Launch → Live |
+| `governance` (Governance Pipeline) | Plan → Analyze → Design → Build → Test → Deploy → Live |
 
-Fully custom stages are supported via the `stages` parameter. Stage checklists are trackable (persisted as gateDone); they do not hard-block card moves. Prefer `lite` unless you need the longer ToB or governance pipelines.
+Fully custom stages are supported via the `stages` parameter. Prefer `lite` unless you need the longer ToB or governance pipelines. (Legacy files that still contain per-stage `gates` / `gateDone` load fine — those fields are dropped on validate.)
 
 ## Tools
 
@@ -189,11 +194,11 @@ Fully custom stages are supported via the `stages` parameter. Stage checklists a
 | Tool | What it does |
 |---|---|
 | `delivery_init` | Initialize a project (prefer `lite`; or `default` / `governance` / custom stages) |
-| `delivery_card` | Add a card: title, stage, owner, due date, optional description, acceptance criteria, DoD |
+| `delivery_card` | Add a card: title, stage, owner, optional start/due, description, acceptance criteria, DoD checklist |
 | `delivery_move` | Move a card to another stage (records a handoff; owner can change). Same-stage owner changes are recorded as a decision, not a handoff |
 | `delivery_board` | Quick text board; excludes archived cards unless requested |
 | `delivery_open` | Editable local board URL (drag, create/edit) |
-| `delivery_update` | Edit title, owner, due, description, acceptance and DoD without moving |
+| `delivery_update` | Edit title, owner, start/due, description, acceptance and DoD without moving |
 | `delivery_log` | Log progress / risk / blocker / decision |
 | `delivery_weekly` | Client weekly report (Markdown): shipped / handoffs / open & resolved risks / next bets |
 
@@ -202,9 +207,10 @@ Fully custom stages are supported via the `stages` parameter. Stage checklists a
 | Tool | What it does |
 |---|---|
 | `delivery_archive` / `delivery_restore` | Hide a card without deleting history / return it to its original stage |
+| `delivery_archive_board` | Snapshot the whole board to `delivery-archive/…`, then reset an empty board (same pipeline) |
+| `delivery_dod_add` / `delivery_dod_check` | Append a DoD checklist item / tick or untick an item (never blocks moves) |
 | `delivery_board_html` | Read-only standalone HTML snapshot |
 | `delivery_resolve` | Mark an open risk/blocker log entry resolved by index |
-| `delivery_gate` | Toggle/set a stage checklist item (trackable, not a hard blocker) |
 | `delivery_stage_add` / `delivery_stage_update` / `delivery_stage_remove` | Evolve the pipeline after init (remove requires `migrate_to` if cards remain; stages accept optional soft `wip_limit`) |
 
 ## Editable local board vs offline HTML
@@ -241,7 +247,7 @@ Implementation notes:
 - Plugin contract `name / inject / Config / apply`; tools via `defineTool`; the bundled `skills/delivery/SKILL.md` is registered through `ctx.skills.register`. Tool output renderers return `ContentBlock[]`.
 - Domain logic (`lib/delivery.js`) and the HTML renderer (`lib/board-html.js`) are pure functions; all writes go through `lib/store.js`. The DSH plugin uses `ctx.fs`; the standalone CLI uses `lib/node-fs.js` + `lib/standalone.js` with the same store contract.
 - Weekly reports cover seven local-calendar days starting at `week_start` (default: Monday of the current week). **Shipped** = handoffs into the terminal pipeline stage or archives in that window; open risks are listed; **Risks resolved this week** uses `resolvedAt` in the window. Pass `next_week` notes to include a **Next bets** section (omitted when empty).
-- Stage gates are **trackable checklists** persisted on each stage (`gateDone`); they do **not** block card moves.
+- Per-card **DoD** is a checkable checklist (`{text, done, doneBy?, doneAt?}`); ticking never blocks moves. Legacy string/list DoD migrates on load.
 - Soft **WIP limits** (`wipLimit` / tool field `wip_limit`) are optional per stage; over-limit stages warn on the board and after moves, but never refuse a move.
 - Pipeline stages can be added/updated/removed after init via tools or `/delivery-admin`. Removing a stage with cards requires `migrate_to`.
 - User content in HTML is escaped (covered by tests).
@@ -257,7 +263,7 @@ Drawn from delivery practices that fit an in-repo board without becoming a PM su
 
 Hard product boundary — this stays a local, in-repo delivery board:
 
-- Hard-blocking gates or hard WIP (no process engine)
+- Hard-blocking DoD/WIP (no process engine)
 - Multi-project / multi-workspace rollup or org portfolio
 - Cloud notifications, email/IM push, accounts, or SSO
 - Custom-field sprawl / multiple issue-type systems
@@ -273,9 +279,9 @@ Hard product boundary — this stays a local, in-repo delivery board:
 ## Known limitations
 
 - **Standalone CLI** needs only Node ≥20 (`npx github:jerryxff26-alt/delivery-board` now; `npx dsh-delivery-board` after npm publish). The DSH plugin path is a developer preview: `engines.dsh >=0.2.0-rc.2 <0.3.0`; peers `@deepseek-ai/dsh-tools >=0.2.0-rc.2 <0.3.0`, `@deepseek-ai/schemastery ~3.18.5` (host-provided, optional). Smoke-tested on DSH 0.2.1-rc.2; previously verified on 0.2.0-rc.2.
-- No Gantt scheduling, automatic bulk archive, hard move-blocking gates/WIP, or realtime multi-user sync.
+- No full Gantt resource loading, hard move-blocking DoD/WIP, or realtime multi-user sync. Whole-board archive is a deliberate snapshot+reset, not automatic bulk archive.
 - Drag/drop (and Edit → Stage fallback) are checked in a local browser harness; no full keyboard/mobile/WCAG claim.
-- Gate checklists and WIP limits are trackable soft signals only; moving a card does not require gates to be checked or WIP to be under limit.
+- DoD checklists and WIP limits are soft signals only; moving a card does not require DoD items to be checked or WIP to be under limit.
 - Empty columns and uninitialized projects point at **one** next step (`init` / `delivery_init` / `/delivery …`, or **New card** on the board).
 
 ## License

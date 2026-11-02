@@ -35,20 +35,20 @@ test('renderBoardHtml escapes user content (XSS safe)', () => {
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'))
 })
 
-test('renderBoardHtml shows stages, risks and audit trail; gates live under the board', () => {
+test('renderBoardHtml shows stages and risks; no board gates or activity panel', () => {
   const html = renderBoardHtml(sampleState())
   assert.ok(html.includes('Analyze'))
-  assert.ok(html.includes('Acceptance criteria frozen'))
-  assert.ok(html.includes('class="board-gates"'))
   assert.ok(html.includes('Risks ('))
   assert.ok(html.includes('Understaffed'))
-  assert.ok(html.includes('Activity ·'))
   assert.ok(html.includes('PRD reviewed'))
+  assert.ok(html.includes('dod-progress') || html.includes('0/1') || html.includes('class="dod-progress"'))
   const body = html.split('<script>')[0]
   assert.doesNotMatch(body, /class="col-role"/)
-  // Column headers are name + count only (gates moved under #board-gates)
-  assert.match(body, /id="board-gates"/)
-  assert.match(body, /class="board-gates"/)
+  assert.doesNotMatch(body, /board-gates|id="board-gates"|class="audit"|Activity ·|活动/)
+  assert.doesNotMatch(body, /阶段检查清单|Stage checklist/)
+  assert.match(body, /id="archive-board"/)
+  assert.match(body, /id="archive-board-dialog"/)
+  assert.match(body, /name="start"/)
 })
 
 test('renderBoardHtml marks overdue cards', () => {
@@ -204,24 +204,20 @@ test('live board exposes log risk UI and hides resolved risks', () => {
   assert.equal(renderRisks(state, true), '')
 })
 
-test('live board renders trackable gate checkboxes', () => {
+test('live board renders checkable DoD in detail and archive-board controls', () => {
   const state = sampleState()
   const live = renderBoardHtml(state, { endpoint: '/board/test', revision: 'revision' })
-  assert.match(live, /gate-check/)
-  assert.match(live, /data-action="gate"/)
-  assert.match(live, /save\('gate'/)
-  assert.doesNotMatch(live.split('<script>')[0], /Delivery state is saved|Drag a card into another stage|board-footer/)
+  assert.match(live, /data-action="dod-check"/)
+  assert.match(live, /archive-board/)
+  assert.doesNotMatch(live, /gate-check|data-action="gate"|save\('gate'/)
+  assert.doesNotMatch(live.split('<script>')[0], /Delivery state is saved|Drag a card into another stage|board-footer|board-gates|class="audit"/)
 })
 
-test('under-board gates, audit and risks stay collapsed by default', () => {
+test('risks stay collapsed by default; gates and activity are gone', () => {
   const s = createProject({ customer: 'X', template: 'default' })
   const html = renderBoardHtml(s)
-  assert.match(html, /<details class="board-gates"><summary>/)
-  assert.doesNotMatch(html, /<details class="board-gates" open>/)
-  assert.match(html, /<details class="gates"><summary>/)
-  assert.doesNotMatch(html, /<details class="gates" open>/)
-  assert.match(html, /<details class="audit">/)
-  assert.doesNotMatch(html, /<details class="audit" open>/)
+  assert.doesNotMatch(html, /board-gates|class="gates"|class="audit"/)
+  assert.match(html, /id="risks"/)
 })
 
 test('v0.3.0 polish-freeze: title+meta face, touch ⋯ overlay, quiet secondary views', () => {
@@ -252,7 +248,7 @@ test('v0.3.0 polish-freeze: title+meta face, touch ⋯ overlay, quiet secondary 
   assert.match(body, /box-shadow: none/)
   assert.doesNotMatch(body, /class="col-role"/)
   assert.match(body, /class="toolbar-more"/)
-  assert.match(body, /id="board-gates"/)
+  assert.doesNotMatch(body, /board-gates|class="audit"/)
   assert.match(body, />Active</)
   assert.match(body, />Timeline</)
   assert.match(body, />Archive</)
@@ -274,16 +270,14 @@ test('v0.3.0 polish-freeze: title+meta face, touch ⋯ overlay, quiet secondary 
   assert.match(body, /\.timeline-panel \{[^}]*background: transparent/)
 })
 
-test('stage checklist copy flattens nested labels and adds a soft hint', () => {
+test('zh locale keeps bilingual chrome without stage checklist or activity', () => {
   const html = renderBoardHtml(createProject({ customer: 'X', template: 'default' }), { locale: 'zh-CN' })
   const body = html.split('<script>')[0]
-  assert.match(body, /阶段检查清单 ·/)
-  assert.match(body, /每个阶段完成前要确认的事项，只做提醒，不拦拖拽/)
-  assert.doesNotMatch(body, /关卡 ·/)
-  assert.doesNotMatch(body, /class="board-gate-name"/)
-  assert.match(body, /<details class="gates"><summary>[^<]+ · \d+\/\d+<\/summary>/)
+  assert.doesNotMatch(body, /阶段检查清单|活动 ·|board-gates|class="audit"/)
+  assert.match(body, /归档整板/)
   const en = renderBoardHtml(createProject({ customer: 'X', template: 'default' }), { locale: 'en' }).split('<script>')[0]
-  assert.match(en, /Stage checklist ·/)
+  assert.match(en, /Archive board/)
+  assert.doesNotMatch(en, /Stage checklist|Activity ·/)
 })
 
 test('empty columns render full-width with empty state and a header hide control', () => {
@@ -364,4 +358,25 @@ test('card description appears on the board, detail, form and offline export', (
   assert.match(detail, /class="detail-desc"/)
   assert.match(detail, /Short note/)
   assert.match(detail, /Second line/)
+})
+
+test('cards show muted DoD progress and detail lists checkable items', () => {
+  let state = createProject({ customer: 'X', template: 'lite' })
+  state = addCard(state, {
+    title: 'API', stage: 'doing', owner: 'Ada', start: '2026-11-01', due: '2026-11-10',
+    dod: [{ text: 'Specs', done: true, doneAt: '2026-11-02T09:03:00.000Z', doneBy: 'Ada' }, { text: 'Tests', done: false }],
+  })
+  const live = renderBoardHtml(state, { endpoint: '/board/test', revision: 'revision', locale: 'zh-CN' })
+  const body = live.split('<script>')[0]
+  assert.match(body, /class="dod-progress">1\/2</)
+  assert.match(body, /name="start"/)
+  const detail = renderCardDetail(state.cards[0], state, boardStrings('zh-CN'), { canEdit: true })
+  assert.match(detail, /开始/)
+  assert.match(detail, /2026-11-01/)
+  assert.match(detail, /data-action="dod-check"/)
+  assert.match(detail, /class="dod-item done"/)
+  assert.match(detail, /09:03|11-02/)
+  const offline = renderCardDetail(state.cards[0], state, boardStrings('zh-CN'), { canEdit: false })
+  assert.doesNotMatch(offline, /data-action="dod-check"/)
+  assert.match(offline, /class="dod-item done"/)
 })

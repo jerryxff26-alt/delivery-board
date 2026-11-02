@@ -13,17 +13,9 @@
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
-import {
-  createProject,
-  renderBoard,
-  renderWeekly,
-  wipWarnings,
-  LOG_TYPES,
-  TEMPLATES,
-  resolveStageRef,
-} from './lib/delivery.js'
+import { createProject, renderBoard, renderWeekly, wipWarnings, LOG_TYPES, TEMPLATES, archiveBoard, archiveBoardSlug, resolveCardRef } from './lib/delivery.js'
 import { renderBoardHtml } from './lib/board-html.js'
-import { readState, initializeState, mutateState, resolveTarget } from './lib/store.js'
+import { readState, initializeState, mutateState, resolveTarget, writeState } from './lib/store.js'
 import { applyAction } from './lib/actions.js'
 import { createBoardManager } from './lib/board-server.js'
 import { registerDeliveryCommand } from './lib/commands.js'
@@ -70,7 +62,7 @@ export function apply(ctx, config) {
       'Codebase-native delivery: use the delivery skill for repository-grounded planning, acceptance criteria, handoffs and reporting.',
       'The /delivery skill is model-led. Load it before delivery task actions when it is available in the skill catalog; explicit /delivery invocations already include its instructions.',
       'Daily loop (prefer these tools): delivery_init, delivery_card, delivery_move, delivery_board, delivery_open, delivery_update, delivery_weekly, delivery_log. Prefer template lite for new projects.',
-      'Advanced (only when asked): delivery_stage_*, delivery_gate, delivery_hide, delivery_show, delivery_resolve, delivery_board_html, delivery_archive, delivery_restore. /delivery-admin help is the deterministic escape hatch, not the normal skill workflow.',
+      'Advanced (only when asked): delivery_stage_*, delivery_dod_add, delivery_dod_check, delivery_hide, delivery_show, delivery_resolve, delivery_board_html, delivery_archive, delivery_restore, delivery_archive_board. /delivery-admin help is the deterministic escape hatch, not the normal skill workflow.',
       `Delivery state is stored at the session workspace root (default file ${config.fileName}). ${config.boardFile} is a read-only export; delivery_open returns the editable machine-local board URL.`,
     ].join('\n'),
   })
@@ -94,7 +86,6 @@ export function apply(ctx, config) {
             properties: {
               name: { type: 'string', description: 'Stage name', required: true },
               role: { type: 'string', description: 'Owning role' },
-              gates: { type: 'array', items: { type: 'string' }, description: 'Governance gate checklist' },
               wipLimit: { type: 'number', description: 'Optional soft WIP limit (positive integer; warn-only)' },
             },
             additionalProperties: false,
@@ -118,15 +109,16 @@ export function apply(ctx, config) {
   register(
     defineTool({
       name: 'delivery_card',
-      description: 'Daily: add a work card (title, stage, optional owner/due/description/acceptance/DoD)',
+      description: 'Daily: add a work card (title, stage, optional owner/start/due/description/acceptance/DoD)',
       parameters: {
         title: { type: 'string', description: 'Card title', required: true },
         stage: { type: 'string', description: 'Stage id or name (case-insensitive; must be unique)', required: true },
         owner: { type: 'string', description: 'Owner (optional)' },
+        start: { type: 'string', description: 'Start date YYYY-MM-DD (optional; must be ≤ due when both set)' },
         due: { type: 'string', description: 'Due date YYYY-MM-DD (optional)' },
         description: { type: 'string', description: 'Optional card description' },
         acceptance: { type: 'array', items: { type: 'string' }, description: 'Acceptance criteria (optional)' },
-        dod: { type: 'array', items: { type: 'string' }, description: 'Definition of Done (optional)' },
+        dod: { type: 'array', items: { type: 'string' }, description: 'Definition of Done checklist items (optional)' },
       },
       output: textOutput,
       isConcurrencySafe: () => false,
@@ -275,43 +267,59 @@ export function apply(ctx, config) {
   }))
 
   register(defineTool({
-    name: 'delivery_update', description: 'Daily: edit active card metadata (title/owner/due/description/acceptance/DoD); omitted fields preserved',
+    name: 'delivery_update', description: 'Daily: edit active card metadata (title/owner/start/due/description/acceptance/DoD); omitted fields preserved',
     parameters: {
       card_id: { type: 'string', required: true, description: 'Card id or unique title' },
       title: { type: 'string', description: 'New title' },
       owner: { type: 'string', description: 'New owner; empty string clears' },
+      start: { type: 'string', description: 'Start date YYYY-MM-DD; empty string clears; must be ≤ due when both set' },
       due: { type: 'string', description: 'New due date YYYY-MM-DD; empty string clears' },
       description: { type: 'string', description: 'Card description; empty string clears' },
       acceptance: { type: 'array', items: { type: 'string' }, description: 'Replace acceptance criteria' },
-      dod: { type: 'array', items: { type: 'string' }, description: 'Replace DoD checklist' },
+      dod: { type: 'array', items: { type: 'string' }, description: 'Replace DoD checklist (one string per item; check state resets)' },
     }, output: textOutput, isConcurrencySafe: () => false,
     async execute(args, exec) {
-      const patch = args.due === '' ? { ...args, due: null } : args
+      const patch = { ...args }
+      if (patch.due === '') patch.due = null
+      if (patch.start === '') patch.start = null
       await mutateState(ctx, exec, config.fileName, (state) => applyAction(state, 'update', patch))
       return ok(`Card updated [${args.card_id}]`)
     },
   }))
 
   register(defineTool({
-    name: 'delivery_gate',
-    description: 'Advanced: toggle/set a stage gate checklist item (trackable; does not block moves)',
+    name: 'delivery_dod_add',
+    description: 'Advanced: append a Definition of Done checklist item on a card',
     parameters: {
-      stage_id: { type: 'string', required: true, description: 'Stage id or name' },
-      gate_index: { type: 'number', required: true, description: 'Zero-based index into the stage gates list' },
-      done: { type: 'boolean', description: 'Explicit checked state; omit to toggle' },
+      card_id: { type: 'string', required: true, description: 'Card id or unique title' },
+      text: { type: 'string', required: true, description: 'DoD item text' },
     },
     output: textOutput, isConcurrencySafe: () => false,
     async execute(args, exec) {
-      if (!Number.isInteger(args.gate_index) || args.gate_index < 0) throw new Error('gate_index must be a non-negative integer')
+      await mutateState(ctx, exec, config.fileName, (state) => applyAction(state, 'dod_add', args))
+      return ok(`DoD item added on [${args.card_id}]`)
+    },
+  }))
+
+  register(defineTool({
+    name: 'delivery_dod_check',
+    description: 'Advanced: tick/untick a card DoD checklist item (does not block moves)',
+    parameters: {
+      card_id: { type: 'string', required: true, description: 'Card id or unique title' },
+      index: { type: 'number', required: true, description: 'Zero-based index into the card DoD list' },
+      done: { type: 'boolean', description: 'Explicit checked state; omit to toggle' },
+      done_by: { type: 'string', description: 'Who checked it (optional; defaults to card owner when ticking)' },
+    },
+    output: textOutput, isConcurrencySafe: () => false,
+    async execute(args, exec) {
+      if (!Number.isInteger(args.index) || args.index < 0) throw new Error('index must be a non-negative integer')
       let label
-      let stageId
       await mutateState(ctx, exec, config.fileName, (state) => {
-        const stage = resolveStageRef(state, args.stage_id)
-        stageId = stage.id
-        label = stage.gates?.[args.gate_index]
-        return applyAction(state, 'gate', { ...args, stage_id: stageId })
+        const card = resolveCardRef(state, args.card_id)
+        label = card.dod?.[args.index]?.text ?? args.index
+        return applyAction(state, 'dod_check', args)
       })
-      return ok(`Gate updated on ${stageId}: ${label ?? args.gate_index}`)
+      return ok(`DoD updated on ${args.card_id}: ${label}`)
     },
   }))
 
@@ -347,7 +355,6 @@ export function apply(ctx, config) {
     parameters: {
       name: { type: 'string', required: true, description: 'Stage name' },
       role: { type: 'string', description: 'Owning role' },
-      gates: { type: 'array', items: { type: 'string' }, description: 'Gate checklist labels' },
       id: { type: 'string', description: 'Optional stage id (auto-generated from name when omitted)' },
       after: { type: 'string', description: 'Insert after this stage id (append when omitted)' },
       wip_limit: { type: 'number', description: 'Optional soft WIP limit (positive integer; warn-only, does not block moves)' },
@@ -368,12 +375,11 @@ export function apply(ctx, config) {
 
   register(defineTool({
     name: 'delivery_stage_update',
-    description: 'Advanced: rename a stage or replace role / gate labels / soft WIP after init',
+    description: 'Advanced: rename a stage or replace role / soft WIP after init',
     parameters: {
       stage_id: { type: 'string', required: true, description: 'Stage id or name' },
       name: { type: 'string', description: 'New stage name' },
       role: { type: 'string', description: 'New owning role' },
-      gates: { type: 'array', items: { type: 'string' }, description: 'Replace gate checklist labels (check state kept by index)' },
       wip_limit: { type: 'number', description: 'Soft WIP limit (positive integer). Pass null to clear.' },
     },
     output: textOutput, isConcurrencySafe: () => false,
@@ -410,8 +416,30 @@ export function apply(ctx, config) {
     }))
   }
 
+  register(defineTool({
+    name: 'delivery_archive_board',
+    description: 'Advanced: snapshot the whole board to delivery-archive/<YYYY-MM-DD>-<slug>.json, then reset to an empty board with the same pipeline',
+    parameters: {},
+    output: textOutput, isConcurrencySafe: () => false,
+    async execute(_args, exec) {
+      const state = await loadOrThrow(ctx, exec, config.fileName)
+      const { archive, next } = archiveBoard(state)
+      const day = (archive.archivedAt ?? new Date().toISOString()).slice(0, 10)
+      const slug = archiveBoardSlug(archive.customer)
+      const relFile = `delivery-archive/${day}-${slug}.json`
+      const target = await resolveTarget(ctx, exec, relFile)
+      await ctx.fs.writeText(target, JSON.stringify(archive, null, 2) + '\n', undefined, exec?.signal)
+      await writeState(ctx, exec, config.fileName, next)
+      return ok(`Board archived to ${relFile}; ${config.fileName} reset (pipeline kept).`)
+    },
+  }))
+
   registerDeliveryCommand(ctx, async (action, args, exec) => {
-    const tool = registered.get(action === 'html' ? 'delivery_board_html' : `delivery_${action}`)
+    const key = action === 'html' ? 'delivery_board_html'
+      : action === 'archive-board' ? 'delivery_archive_board'
+      : `delivery_${action}`
+    const tool = registered.get(key)
+    if (!tool) throw new Error(`Unknown delivery command: ${action}`)
     return (await tool.execute(args, exec)).text
   })
 

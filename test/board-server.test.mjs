@@ -13,13 +13,13 @@ function fixture() {
   let version = 1
   const writes = []
   const signal = new AbortController().signal
-  const exec = { agent: { session: { id: 'test', header: { cwd: '/workspace' } } }, signal }
+  const exec = { agent: { session: { id: 'test', header: { cwd: '/workspace' } } }, signal, workspaceCwd: '/workspace' }
   const ctx = { emit() {}, fs: {
     async resolve(file, { cwd }) { return { targetKey: `${cwd}/${file}`, displayPath: file } },
     async stat() { return { type: 'file', version: `v${version}` } },
     async readText() { return disk },
     async writeText(target, text, expected, s) {
-      assert.equal(target.targetKey, '/workspace/delivery.json')
+      assert.match(target.targetKey, /\/delivery\.json$/)
       assert.equal(s, signal)
       if (expected?.kind === 'replaceIfVersion' && expected.version !== `v${version}`) throw Object.assign(new Error('file changed since read'), { code: 'FS_STALE_VERSION' })
       writes.push({ target, text, expected })
@@ -74,7 +74,7 @@ test('edit, archive and restore retain metadata, IDs and audit history', async (
   assert.equal(card.owner, 'Bob')
   assert.equal(card.archivedAt, null)
   assert.deepEqual(card.acceptance, ['SSO supported'])
-  assert.deepEqual(card.dod, ['Reviewed'])
+  assert.deepEqual(card.dod, [{ text: 'Reviewed', done: false }])
   assert.equal(f.getState().logs.length, 3)
 })
 
@@ -457,14 +457,41 @@ test('dispose aborts pending lifetime readiness and waits for socket closure wit
   assert.equal(server.listening, false)
 })
 
-test('live board can toggle stage gates with revision guards', async () => {
+test('live board can tick DoD items with revision guards', async () => {
   const f = fixture()
   const response = await f.post({
-    action: 'gate', args: { stage_id: 'analyze', gate_index: 0, done: true }, revision: f.revision(),
+    action: 'dod_check', args: { card_id: 'c1', index: 0, done: true, done_by: 'Alice' }, revision: f.revision(),
   })
-  assert.equal(response.status, 200)
-  assert.equal(f.getState().pipeline.find((s) => s.id === 'analyze').gateDone[0], true)
+  assert.equal(response.status, 200, response.body?.error)
+  const item = f.getState().cards[0].dod[0]
+  assert.equal(item.done, true)
+  assert.equal(item.doneBy, 'Alice')
+  assert.ok(item.doneAt)
+  assert.match(f.getState().cards[0].dod[0].doneAt, /^\d{4}-\d{2}-\d{2}T/)
   const page = await f.call({ path: '/board/secret' })
-  assert.match(page.text, /gate-check/)
-  assert.match(page.text.split('<script>')[0], /checked/)
+  assert.match(page.text, /data-action="dod-check"/)
+  assert.match(page.text.split('<script>')[0], /class="dod-progress">1\/1</)
+})
+
+test('live board archive_board writes snapshot then resets', async () => {
+  const f = fixture()
+  const before = structuredClone(f.getState())
+  const { mkdtemp, rm, readFile } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-archive-'))
+  f.exec.workspaceCwd = dir
+  // delivery.json still resolves via workspaceCwd; retarget mock assert by rewriting resolve/write
+  const response = await f.post({ action: 'archive_board', args: {}, revision: f.revision() })
+  assert.equal(response.status, 200, response.body?.error)
+  assert.match(response.body.archivedTo, /^delivery-archive\/\d{4}-\d{2}-\d{2}-browser-test\.json$/)
+  const snap = await readFile(join(dir, response.body.archivedTo), 'utf8')
+  assert.equal(JSON.parse(snap).customer, before.customer)
+  assert.equal(JSON.parse(snap).cards.length, 1)
+  const next = f.getState()
+  assert.deepEqual(next.cards, [])
+  assert.deepEqual(next.logs, [])
+  assert.equal(next.customer, before.customer)
+  assert.deepEqual(next.pipeline.map((s) => s.id), before.pipeline.map((s) => s.id))
+  await rm(dir, { recursive: true, force: true })
 })

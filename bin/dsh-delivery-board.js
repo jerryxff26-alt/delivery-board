@@ -14,21 +14,24 @@ Commands (same shape as /delivery-admin in the DSH plugin):
   help
   init <customer> [template]              # e.g. init ACME lite
   init {"customer":"ACME","template":"lite"}
-  card <title> <stage> [owner] [--description ...]
-  card {"title":"API","stage":"doing","owner":"Alice","description":"..."}
+  card <title> <stage> [owner] [--start YYYY-MM-DD] [--due YYYY-MM-DD] [--description ...]
+  card {"title":"API","stage":"doing","owner":"Alice","start":"2026-11-01","due":"2026-11-10"}
   board [--archived]
   open                                    # local editable board (Ctrl+C to stop)
   move <card|title> <stage|name>          # e.g. move API review
-  update {"card_id":"c1","owner":"Bob","description":"..."}
-  update <card|title> --description ...
+  update {"card_id":"c1","owner":"Bob","start":"...","due":"...","description":"..."}
+  update <card|title> --start ... | --due ... | --description ...
+  dod add <card|title> <text>
+  dod check <card|title> <index> [true|false]
   archive <card|title> | restore <card|title>
+  archive-board                           # snapshot to delivery-archive/, then reset empty board
   log {"type":"blocker","text":"..."}
   resolve <log_index>
-  gate <stage|name> <gate_index> [true|false]
   hide <stage|name> | show <stage|name>
   stage_add|stage_update|stage_remove {...}
   weekly [YYYY-MM-DD] | {"week_start":"...","next_week":"..."}
   html
+  # view an archived board: --file delivery-archive/<file>.json open|html
 
 Also works as a DSH plugin:
   dsh plugin --profile web add github:jerryxff26-alt/delivery-board

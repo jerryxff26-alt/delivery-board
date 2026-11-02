@@ -30,7 +30,7 @@ Use this set for almost all requests:
 | Weekly client report | `delivery_weekly` |
 | Progress / risk / blocker | `delivery_log` |
 
-Do **not** reach for advanced tools unless the user explicitly asks for pipeline surgery, stage checklists, archive/restore, offline HTML export, or resolving a log by index.
+Do **not** reach for advanced tools unless the user explicitly asks for pipeline surgery, DoD checklist edits, archive/restore, whole-board archive, offline HTML export, or resolving a log by index.
 
 ## Start from the current context
 
@@ -44,7 +44,7 @@ Do **not** reach for advanced tools unless the user explicitly asks for pipeline
 For a new delivery or a substantial re-plan:
 
 - Use existing stages when a project already exists. For a new project, prefer the `lite` template (Backlog → Doing → Review → Live) unless the user asks for `default`, `governance`, or custom stages.
-- Present a compact proposal: customer/project, pipeline, cards, stage, owner, due date, acceptance criteria, Definition of Done (DoD), and the repository evidence or requirement behind each card.
+- Present a compact proposal: customer/project, pipeline, cards, stage, owner, optional start/due dates, acceptance criteria, Definition of Done (DoD) checklist, and the repository evidence or requirement behind each card.
 - Keep cards outcome-oriented. Acceptance criteria describe observable delivery results; DoD describes completion evidence such as review, tests or sign-off. Do not mark either complete merely because it was generated.
 - Leave unknown owners unassigned and unknown due dates unset. Ask only for information needed to resolve a material ambiguity; do not invent people, deadlines or approval.
 - Separate existing/reusable work, new in-scope work, excluded work and external blockers. Do not silently add platform integrations, infrastructure hardening or new management systems.
@@ -60,8 +60,8 @@ Daily tools (prefer these):
 
 | Intent | Tool and boundary |
 |---|---|
-| Create an approved card | `delivery_card`: title, existing stage ID, optional owner/due, acceptance and DoD |
-| Edit card details | `delivery_update`: title, owner, due, acceptance and DoD; moving stage is a separate operation |
+| Create an approved card | `delivery_card`: title, existing stage ID, optional owner/start/due, acceptance and DoD checklist |
+| Edit card details | `delivery_update`: title, owner, start/due, acceptance and DoD; moving stage is a separate operation |
 | Hand off work | `delivery_move`: card ID, target stage ID, optional new owner and a concise evidence-based handoff note |
 | Record progress or an issue | `delivery_log`: progress, risk, blocker or decision; associate the card when known |
 | Inspect delivery | `delivery_board`: active cards by default; include archives only when needed |
@@ -75,10 +75,11 @@ Advanced (keep available; use only when explicitly needed):
 | Archive or resume work | `delivery_archive` / `delivery_restore`: archiving keeps history; restore before editing or moving an archived card |
 | Share an offline view | `delivery_board_html`: a read-only HTML snapshot, not a writable board |
 | Resolve a risk/blocker by log index | `delivery_resolve` |
-| Toggle a stage checklist | `delivery_gate` (trackable; does not block moves) |
+| DoD checklist | `delivery_dod_add` / `delivery_dod_check` (never blocks moves) |
+| Archive the whole board | `delivery_archive_board` (writes `delivery-archive/…`, then resets empty board) |
 | Soft WIP or pipeline surgery | `delivery_stage_add` / `delivery_stage_update` / `delivery_stage_remove` with optional `wip_limit` |
 
-For an explicit card change, perform the requested tool operation and verify the result; do not require a new overall plan. Before a handoff, distinguish available evidence from unmet criteria or missing sign-off. Gates are human-confirmed/display-only: do not claim a tool enforced them or tests passed unless actual evidence supports that claim. A same-stage owner change is an update, not a new cross-stage handoff.
+For an explicit card change, perform the requested tool operation and verify the result; do not require a new overall plan. Before a handoff, distinguish available evidence from unmet criteria or missing sign-off. DoD ticks are human-confirmed/display-only and never block moves: do not claim a tool enforced completion or that tests passed unless actual evidence supports that claim. A same-stage owner change is an update, not a new cross-stage handoff.
 
 ## Report facts, then next actions
 

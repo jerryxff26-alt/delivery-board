@@ -146,3 +146,20 @@ test('timeline bars use shared accent — no per-stage --stage vars or stage-dot
   assert.doesNotMatch(html, /style="[^"]*--stage:/)
   assert.doesNotMatch(html, /stage-dot/)
 })
+
+test('timeline draws schedule bar when start and due are both set', () => {
+  let s = createProject({ customer: 'Sched', template: 'lite' })
+  s = addCard(s, { title: 'Spanned', stage: 'doing', owner: 'Ada', start: '2026-10-20', due: '2026-10-28' })
+  s = addCard(s, { title: 'Due only', stage: 'doing', due: '2026-10-30' })
+  s.cards = s.cards.map((card) => ({ ...card, createdAt: at(card.id === 'c1' ? 10 : 2) }))
+  const html = renderTimeline(s, { now: NOW, locale: 'en-US', strings: boardStrings('en-US'), query: '', owner: '', interactive: false })
+  assert.match(html, /class="tl-sched"/)
+  assert.match(html, /Schedule \(start→due\)/)
+  // due-only still uses ◆, not a schedule bar alone for that card
+  const dueOnly = html.split('data-card-id="c2"')[1].split('class="tl-row')[0]
+  assert.match(dueOnly, /class="tl-due/)
+  assert.doesNotMatch(dueOnly, /class="tl-sched/)
+  const spanned = html.split('data-card-id="c1"')[1].split('class="tl-row')[0]
+  assert.match(spanned, /class="tl-sched/)
+  assert.doesNotMatch(spanned, /class="tl-due/)
+})

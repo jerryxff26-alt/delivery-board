@@ -128,3 +128,37 @@ test('validateState trims card description and drops empty', () => {
     /description must be a string/,
   )
 })
+
+test('validateState drops legacy gates and migrates string DoD', () => {
+  const base = createProject({ customer: 'Legacy', template: 'lite' })
+  const raw = {
+    ...base,
+    pipeline: base.pipeline.map((stage, i) => i === 0
+      ? { ...stage, gates: ['Old gate'], gateDone: [true] }
+      : stage),
+    cards: [{
+      id: 'c1', title: 'Old', stage: 'backlog', owner: '', due: null,
+      acceptance: [], dod: ['Alpha', 'Beta'], createdAt: base.createdAt,
+    }],
+    lastCardNumber: 1,
+  }
+  const cleaned = validateState(raw)
+  assert.equal(cleaned.pipeline[0].gates, undefined)
+  assert.equal(cleaned.pipeline[0].gateDone, undefined)
+  assert.deepEqual(cleaned.cards[0].dod, [
+    { text: 'Alpha', done: false },
+    { text: 'Beta', done: false },
+  ])
+})
+
+test('validateState rejects start after due', () => {
+  const base = createProject({ customer: 'S', template: 'lite' })
+  const card = {
+    id: 'c1', title: 'T', stage: 'backlog', owner: '', due: '2026-11-01',
+    start: '2026-11-10', acceptance: [], dod: [], createdAt: base.createdAt,
+  }
+  assert.throws(
+    () => validateState({ ...base, cards: [card], lastCardNumber: 1 }, 'delivery.json'),
+    /start \(2026-11-10\) must be on or before due/,
+  )
+})

@@ -9,8 +9,9 @@ test('slash command supports discoverable help, precise move and archive syntax'
   assert.deepEqual(parseDeliveryCommand('archive c1'), { action: 'archive', args: { card_id: 'c1' } })
   assert.deepEqual(parseDeliveryCommand('weekly 2026-10-05'), { action: 'weekly', args: { week_start: '2026-10-05' } })
   assert.deepEqual(parseDeliveryCommand('resolve 2'), { action: 'resolve', args: { log_index: 2 } })
-  assert.deepEqual(parseDeliveryCommand('gate build 0'), { action: 'gate', args: { stage_id: 'build', gate_index: 0 } })
-  assert.deepEqual(parseDeliveryCommand('gate build 1 true'), { action: 'gate', args: { stage_id: 'build', gate_index: 1, done: true } })
+  assert.deepEqual(parseDeliveryCommand('dod add c1 "Ship notes"'), { action: 'dod_add', args: { card_id: 'c1', text: 'Ship notes' } })
+  assert.deepEqual(parseDeliveryCommand('dod check c1 0 true'), { action: 'dod_check', args: { card_id: 'c1', index: 0, done: true } })
+  assert.deepEqual(parseDeliveryCommand('archive-board'), { action: 'archive-board', args: {} })
   assert.deepEqual(
     parseDeliveryCommand('stage_add {"name":"Hardening","after":"test"}'),
     { action: 'stage_add', args: { name: 'Hardening', after: 'test' } },
@@ -21,7 +22,8 @@ test('slash command supports discoverable help, precise move and archive syntax'
   )
   assert.throws(() => parseDeliveryCommand('resolve'), /resolve <log_index>/)
   assert.throws(() => parseDeliveryCommand('resolve c1'), /resolve <log_index>/)
-  assert.throws(() => parseDeliveryCommand('gate build'), /gate <stage/)
+  assert.throws(() => parseDeliveryCommand('dod check c1'), /dod check/)
+  assert.throws(() => parseDeliveryCommand('gate build'), /Unknown delivery command/)
 })
 
 test('slash command keeps JSON strings intact and never interprets shell syntax', () => {
@@ -38,7 +40,10 @@ test('positional init and card parse without JSON', () => {
   assert.deepEqual(parseDeliveryCommand('card "Pay wall" review Bob'), { action: 'card', args: { title: 'Pay wall', stage: 'review', owner: 'Bob' } })
   assert.deepEqual(parseDeliveryCommand('move "Pay wall" Live'), { action: 'move', args: { card_id: 'Pay wall', to_stage: 'Live' } })
   assert.deepEqual(parseDeliveryCommand('archive "Pay wall"'), { action: 'archive', args: { card_id: 'Pay wall' } })
-  assert.deepEqual(parseDeliveryCommand('gate "In progress" 0 true'), { action: 'gate', args: { stage_id: 'In progress', gate_index: 0, done: true } })
+  assert.deepEqual(parseDeliveryCommand('card API doing Ada --start 2026-11-01 --due 2026-11-10'), {
+    action: 'card', args: { title: 'API', stage: 'doing', owner: 'Ada', start: '2026-11-01', due: '2026-11-10' },
+  })
+  assert.deepEqual(parseDeliveryCommand('update c1 --start 2026-11-02'), { action: 'update', args: { card_id: 'c1', start: '2026-11-02' } })
 })
 
 test('hide and show parse stage refs', () => {
@@ -66,4 +71,11 @@ test('card and update accept --description flag', () => {
     parseDeliveryCommand('update {"card_id":"c1","description":"JSON"}'),
     { action: 'update', args: { card_id: 'c1', description: 'JSON' } },
   )
+})
+
+test('dod and archive-board parse', () => {
+  assert.deepEqual(parseDeliveryCommand('dod add "Pay wall" Docs ready'), { action: 'dod_add', args: { card_id: 'Pay wall', text: 'Docs ready' } })
+  assert.deepEqual(parseDeliveryCommand('dod check c1 1'), { action: 'dod_check', args: { card_id: 'c1', index: 1 } })
+  assert.deepEqual(parseDeliveryCommand('dod check c1 1 false'), { action: 'dod_check', args: { card_id: 'c1', index: 1, done: false } })
+  assert.throws(() => parseDeliveryCommand('archive-board now'), /takes no arguments/)
 })

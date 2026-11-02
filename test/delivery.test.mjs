@@ -10,17 +10,22 @@ import {
   updateCard,
   appendLog,
   resolveLog,
-  setGateDone,
+  setDodDone,
+  addDodItem,
+  archiveBoard,
+  archiveBoardSlug,
   setStageHidden,
   addStage,
   updateStage,
   removeStage,
   renderBoard,
   renderWeekly,
+  normalizeDodItems,
+  dodProgress,
   TEMPLATES,
 } from '../lib/delivery.js'
 
-test('createProject uses the default ToB pipeline with gates', () => {
+test('createProject uses the default ToB pipeline', () => {
   const s = createProject({ customer: 'ACME' })
   assert.equal(s.customer, 'ACME')
   assert.equal(s.template, 'default')
@@ -28,8 +33,7 @@ test('createProject uses the default ToB pipeline with gates', () => {
     s.pipeline.map((p) => p.id),
     TEMPLATES.default.stages.map((p) => p.id),
   )
-  const dev = s.pipeline.find((p) => p.id === 'devsecops')
-  assert.ok(dev.gates.includes('Security scan passed'))
+  assert.ok(s.pipeline.every((p) => p.gates === undefined))
 })
 
 test('createProject supports the governance template', () => {
@@ -39,13 +43,11 @@ test('createProject supports the governance template', () => {
     s.pipeline.map((p) => p.id),
     ['plan', 'analyze', 'design', 'build', 'test', 'deploy', 'live'],
   )
-  const deploy = s.pipeline.find((p) => p.id === 'deploy')
-  assert.ok(deploy.gates.includes('Security gate passed'))
-  assert.ok(deploy.gates.includes('Rollback plan ready'))
+  assert.ok(s.pipeline.every((p) => p.gates === undefined))
 })
 
 
-test('createProject supports the lite template (short pipeline, no gates)', () => {
+test('createProject supports the lite template (short pipeline)', () => {
   const s = createProject({ customer: 'ACME', template: 'lite' })
   assert.equal(s.template, 'lite')
   assert.deepEqual(
@@ -56,7 +58,7 @@ test('createProject supports the lite template (short pipeline, no gates)', () =
     s.pipeline.map((p) => p.name),
     ['Backlog', 'Doing', 'Review', 'Live'],
   )
-  assert.ok(s.pipeline.every((p) => p.gates.length === 0))
+  assert.ok(s.pipeline.every((p) => p.gates === undefined))
   assert.equal(TEMPLATES.lite.name, 'Lite Pipeline')
 })
 
@@ -73,7 +75,8 @@ test('createProject accepts custom stages and rejects bad input', () => {
     stages: [{ name: 'Discovery', gates: ['Confirmed'] }],
   })
   assert.equal(s.template, 'custom')
-  assert.deepEqual(s.pipeline[0].gates, ['Confirmed'])
+  assert.equal(s.pipeline[0].name, 'Discovery')
+  assert.equal(s.pipeline[0].gates, undefined)
   assert.throws(() => createProject({ customer: '  ' }), /customer is required/)
   assert.throws(() => createProject({ customer: 'A', template: 'nope' }), /unknown template/)
 })
@@ -91,7 +94,10 @@ test('addCard stores acceptance criteria and DoD', () => {
   const c = s.cards[0]
   assert.equal(c.id, 'c1')
   assert.deepEqual(c.acceptance, ['SSO supported', 'Legacy accounts compatible'])
-  assert.deepEqual(c.dod, ['PRD reviewed', 'Test cases written'])
+  assert.deepEqual(c.dod, [
+    { text: 'PRD reviewed', done: false },
+    { text: 'Test cases written', done: false },
+  ])
   assert.throws(() => addCard(s, { title: 'x', stage: 'nope' }), /unknown stage/)
   assert.throws(() => addCard(s, { title: ' ', stage: 'dev' }), /title is required/)
 })
@@ -121,15 +127,19 @@ test('appendLog validates type and text', () => {
   assert.equal(s.logs.length, 0) // immutable
 })
 
-test('renderBoard shows gates and risks', () => {
+test('renderBoard shows risks and DoD progress', () => {
   let s = createProject({ customer: 'ACME' })
-  s = addCard(s, { title: 'SSO login', stage: 'dev', owner: 'erin', due: '2026-10-25' })
+  s = addCard(s, {
+    title: 'SSO login', stage: 'dev', owner: 'erin', due: '2026-10-25',
+    dod: [{ text: 'PRD reviewed', done: true }, { text: 'Tests written', done: false }],
+  })
   s = appendLog(s, { type: 'blocker', text: 'Waiting on client UAT env' })
   const board = renderBoard(s)
   assert.ok(board.includes('# ACME Delivery Board'))
   assert.ok(board.includes('## Development'))
-  assert.ok(board.includes('Gates: [ ] DoD met'))
+  assert.doesNotMatch(board, /Gates:/)
   assert.ok(board.includes('[c1] SSO login @erin'))
+  assert.match(board, /DoD 1\/2/)
   assert.ok(board.includes('Waiting on client UAT env'))
 })
 
@@ -358,7 +368,8 @@ test('updateCard edits partial fields immutably without moving cards or changing
   })
   assert.deepEqual(allFields.cards[0], {
     ...edited.cards[0], owner: 'erin', due: '2028-02-29',
-    acceptance: ['New criterion', 'Second criterion'], dod: ['Ready', 'Tested'],
+    acceptance: ['New criterion', 'Second criterion'],
+    dod: [{ text: 'Ready', done: false }, { text: 'Tested', done: false }],
   })
   assert.equal(allFields.logs.length, edited.logs.length + 1)
   assert.match(allFields.logs.at(-1).text, /updated: owner, due, acceptance, dod/)
@@ -395,13 +406,15 @@ test('addCard and updateCard consistently reject invalid due dates and accept ac
   const state = addCard(initial, { title: 'Feature', stage: 'dev', due: '2026-10-20' })
   const snapshot = structuredClone(state)
   for (const due of [
-    '', 'not-a-date', '2026-02-29', '2026-02-30', '2026-04-31', '1900-02-29',
+    'not-a-date', '2026-02-29', '2026-02-30', '2026-04-31', '1900-02-29',
     '2026-13-01', '2026-00-10', '2026-10-00', '2026-1-01',
     '2026-10-20T00:00:00Z', ' 2026-10-20 ', 0, false, ['2026-10-20'], {},
   ]) {
     assert.throws(() => addCard(initial, { title: 'Bad date', stage: 'dev', due }), /due.*valid date.*YYYY-MM-DD/)
     assert.throws(() => updateCard(state, { cardId: 'c1', title: 'Changed', due }), /due.*valid date.*YYYY-MM-DD/)
   }
+  // Empty string clears due (same as null) rather than rejecting.
+  assert.equal(addCard(initial, { title: 'Cleared due', stage: 'dev', due: '' }).cards[0].due, null)
   assert.deepEqual(state, snapshot)
   assert.deepEqual(initial.cards, [])
   assert.equal(addCard(initial, { title: 'Leap day', stage: 'dev', due: '2000-02-29' }).cards[0].due, '2000-02-29')
@@ -520,18 +533,62 @@ test('applyAction resolve and log share the board/tool mutation path', async () 
   assert.throws(() => applyAction(state, 'resolve', { log_index: '0' }), /log_index must be a non-negative integer/)
 })
 
-test('setGateDone toggles trackable stage gates without blocking moves', () => {
-  let state = createProject({ customer: 'ACME', template: 'governance' })
-  state = addCard(state, { title: 'Feature', stage: 'build' })
-  const checked = setGateDone(state, { stageId: 'build', gateIndex: 0, done: true })
-  assert.deepEqual(checked.pipeline.find((s) => s.id === 'build').gateDone, [true, false])
-  assert.match(renderBoard(checked), /\[x\] Code review passed/)
-  assert.match(renderBoard(checked), /\[ \] DoD met/)
-  // Moves still work with incomplete gates.
-  assert.equal(moveCard(checked, { cardId: 'c1', toStage: 'test' }).cards[0].stage, 'test')
-  assert.equal(setGateDone(checked, { stageId: 'build', gateIndex: 0, done: true }), checked)
-  assert.throws(() => setGateDone(state, { stageId: 'build', gateIndex: 9 }), /unknown gate index/)
-  assert.throws(() => setGateDone(state, { stageId: 'nope', gateIndex: 0 }), /unknown stage/)
+test('normalizeDodItems migrates legacy strings and setDodDone ticks items', () => {
+  assert.deepEqual(normalizeDodItems('A\nB'), [
+    { text: 'A', done: false },
+    { text: 'B', done: false },
+  ])
+  assert.deepEqual(normalizeDodItems(['A', { text: 'B', done: true, doneAt: '2026-11-02T09:00:00.000Z', doneBy: 'Ada' }]), [
+    { text: 'A', done: false },
+    { text: 'B', done: true, doneAt: '2026-11-02T09:00:00.000Z', doneBy: 'Ada' },
+  ])
+  let state = createProject({ customer: 'ACME', template: 'lite' })
+  state = addCard(state, { title: 'Feature', stage: 'doing', owner: 'Ada', dod: ['PRD', 'Tests'] })
+  assert.deepEqual(dodProgress(state.cards[0]), { done: 0, total: 2 })
+  const checked = setDodDone(state, { cardId: 'c1', index: 0, done: true })
+  assert.equal(checked.cards[0].dod[0].done, true)
+  assert.ok(checked.cards[0].dod[0].doneAt)
+  assert.equal(checked.cards[0].dod[0].doneBy, 'Ada')
+  assert.deepEqual(dodProgress(checked.cards[0]), { done: 1, total: 2 })
+  // Ticking never blocks moves.
+  assert.equal(moveCard(checked, { cardId: 'c1', toStage: 'review' }).cards[0].stage, 'review')
+  assert.equal(setDodDone(checked, { cardId: 'c1', index: 0, done: true }), checked)
+  const added = addDodItem(checked, { cardId: 'c1', text: 'Docs' })
+  assert.equal(added.cards[0].dod.length, 3)
+  assert.throws(() => setDodDone(state, { cardId: 'c1', index: 9 }), /unknown DoD index/)
+})
+
+test('start must be on or before due', () => {
+  const state = createProject({ customer: 'ACME', template: 'lite' })
+  assert.throws(
+    () => addCard(state, { title: 'Bad', stage: 'doing', start: '2026-11-10', due: '2026-11-01' }),
+    /start \(2026-11-10\) must be on or before due \(2026-11-01\)/,
+  )
+  const ok = addCard(state, { title: 'Ok', stage: 'doing', start: '2026-11-01', due: '2026-11-10' })
+  assert.equal(ok.cards[0].start, '2026-11-01')
+  assert.throws(
+    () => updateCard(ok, { cardId: 'c1', start: '2026-11-20' }),
+    /start \(2026-11-20\) must be on or before due \(2026-11-10\)/,
+  )
+})
+
+test('archiveBoard snapshots then resets empty board keeping pipeline', () => {
+  let state = createProject({ customer: 'Tiffany', template: 'default' })
+  state = addCard(state, { title: 'A', stage: 'ba' })
+  state = appendLog(state, { type: 'risk', text: 'Slip' })
+  state = setStageHidden(state, { stageId: 'ba', hidden: true })
+  const { archive, next } = archiveBoard(state)
+  assert.equal(archive.customer, 'Tiffany')
+  assert.equal(archive.cards.length, 1)
+  assert.equal(archive.logs.length, 1)
+  assert.ok(archive.archivedAt)
+  assert.equal(next.customer, 'Tiffany')
+  assert.equal(next.template, 'default')
+  assert.deepEqual(next.pipeline.map((s) => s.id), state.pipeline.map((s) => s.id))
+  assert.deepEqual(next.cards, [])
+  assert.deepEqual(next.logs, [])
+  assert.deepEqual(next.hiddenStages, ['ba'])
+  assert.equal(archiveBoardSlug('Tiffany Cosmetics'), 'tiffany-cosmetics')
 })
 
 test('pipeline stages can be added, updated and removed safely after init', () => {
@@ -539,12 +596,13 @@ test('pipeline stages can be added, updated and removed safely after init', () =
   state = addCard(state, { title: 'On build', stage: 'build' })
   const added = addStage(state, { name: 'Hardening', after: 'test', role: 'Sec', gates: ['Scan clean'] })
   assert.equal(added.template, 'custom')
-  assert.ok(added.pipeline.some((s) => s.id === 'hardening' && s.name === 'Hardening'))
+  assert.ok(added.pipeline.some((s) => s.id === 'hardening' && s.name === 'Hardening' && s.gates === undefined))
   assert.match(added.logs.at(-1).text, /Stage "Hardening"/)
 
-  const renamed = updateStage(added, { stageId: 'hardening', name: 'Security Hardening', gates: ['Scan clean', 'Sign-off'] })
+  const renamed = updateStage(added, { stageId: 'hardening', name: 'Security Hardening', role: 'Security' })
   assert.equal(renamed.pipeline.find((s) => s.id === 'hardening').name, 'Security Hardening')
-  assert.deepEqual(renamed.pipeline.find((s) => s.id === 'hardening').gates, ['Scan clean', 'Sign-off'])
+  assert.equal(renamed.pipeline.find((s) => s.id === 'hardening').role, 'Security')
+  assert.equal(renamed.pipeline.find((s) => s.id === 'hardening').gates, undefined)
 
   assert.throws(() => removeStage(added, { stageId: 'build' }), /still has 1 card/)
   const migrated = removeStage(added, { stageId: 'build', migrateTo: 'test' })
@@ -640,7 +698,7 @@ test('ambiguous card title lists matches', () => {
 test('stage after=name and migrate_to=name resolve', () => {
   let s = createProject({ customer: 'X', template: 'lite' })
   s = addCard(s, { title: 'A', stage: 'doing' })
-  s = addStage(s, { name: 'Hardening', after: 'Doing', gates: ['Scan'] })
+  s = addStage(s, { name: 'Hardening', after: 'Doing' })
   assert.ok(s.pipeline.some((x) => x.name === 'Hardening'))
   const doingIdx = s.pipeline.findIndex((x) => x.id === 'doing')
   assert.equal(s.pipeline[doingIdx + 1].name, 'Hardening')

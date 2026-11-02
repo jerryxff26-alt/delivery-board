@@ -32,9 +32,9 @@ function fixture() {
   return { tools, commands, skills, prompts, exec, files, writes, signal }
 }
 
-test('all eighteen tools render desktop-compatible text content blocks', () => {
+test('all twenty tools render desktop-compatible text content blocks', () => {
   const { tools } = fixture()
-  assert.equal(tools.size, 18)
+  assert.equal(tools.size, 20)
   for (const tool of tools.values()) {
     const content = tool.output.render({}, { text: 'test result' })
     assert.deepEqual(content, [{ type: 'text', text: 'test result' }], tool.name)
@@ -53,7 +53,7 @@ test('systemPrompt and tool descriptions prefer the daily loop', () => {
   for (const name of ['delivery_init', 'delivery_card', 'delivery_move', 'delivery_board', 'delivery_open', 'delivery_update', 'delivery_weekly', 'delivery_log']) {
     assert.match(tools.get(name).description, /^Daily:/, name)
   }
-  for (const name of ['delivery_gate', 'delivery_hide', 'delivery_show', 'delivery_resolve', 'delivery_board_html', 'delivery_archive', 'delivery_restore', 'delivery_stage_add']) {
+  for (const name of ['delivery_dod_add', 'delivery_dod_check', 'delivery_hide', 'delivery_show', 'delivery_resolve', 'delivery_board_html', 'delivery_archive', 'delivery_restore', 'delivery_archive_board', 'delivery_stage_add']) {
     assert.match(tools.get(name).description, /^Advanced:/, name)
   }
 })
@@ -87,14 +87,18 @@ test('plugin tools complete init, card, handoff, log, board, HTML and weekly flo
   assert.equal(state.cards[0].stage, 'design')
   assert.deepEqual(state.logs.map((entry) => entry.type), ['handoff', 'blocker'])
   assert.ok(state.logs[1].resolvedAt)
-  await call('delivery_gate', { stage_id: 'design', gate_index: 0, done: true })
-  await call('delivery_stage_add', { name: 'Hardening', after: 'test', gates: ['Scan clean'] })
+  await call('delivery_dod_add', { card_id: 'c1', text: 'Docs' })
+  await call('delivery_dod_check', { card_id: 'c1', index: 0, done: true })
+  await call('delivery_stage_add', { name: 'Hardening', after: 'test' })
   await call('delivery_stage_update', { stage_id: 'hardening', name: 'Sec Hardening' })
   await assert.rejects(call('delivery_stage_remove', { stage_id: 'design' }), /still has/)
   await call('delivery_stage_remove', { stage_id: 'hardening' })
   const afterPipeline = JSON.parse(files.get('/workspace/delivery.json'))
-  assert.ok(afterPipeline.pipeline.find((s) => s.id === 'design').gateDone[0])
+  assert.equal(afterPipeline.cards[0].dod[0].done, true)
+  assert.equal(afterPipeline.cards[0].dod[0].text, 'Reviewed')
+  assert.equal(afterPipeline.cards[0].dod[1].text, 'Docs')
   assert.equal(afterPipeline.pipeline.some((s) => s.id === 'hardening'), false)
+  assert.equal(afterPipeline.pipeline.find((s) => s.id === 'design').gates, undefined)
   for (const write of writes) {
     assert.ok(write.target.displayPath === 'delivery-board.html' ? write.expected === undefined : ['createIfAbsent', 'replaceIfVersion'].includes(write.expected?.kind))
     assert.equal(write.signal, signal, write.target.displayPath)
