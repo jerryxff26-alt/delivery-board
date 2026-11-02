@@ -20,11 +20,11 @@
   "author": "jerryxff26-alt",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jerryxff26-alt/dsh-delivery-board.git"
+    "url": "git+https://github.com/jerryxff26-alt/delivery-board.git"
   },
-  "homepage": "https://github.com/jerryxff26-alt/dsh-delivery-board#readme",
+  "homepage": "https://github.com/jerryxff26-alt/delivery-board#readme",
   "bugs": {
-    "url": "https://github.com/jerryxff26-alt/dsh-delivery-board/issues"
+    "url": "https://github.com/jerryxff26-alt/delivery-board/issues"
   },
   "type": "module",
   "main": "index.js",

@@ -29,7 +29,7 @@ Commands (same shape as /delivery-admin in the DSH plugin):
   html
 
 Also works as a DSH plugin:
-  dsh plugin --profile web add github:jerryxff26-alt/dsh-delivery-board
+  dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 `
 
 function parseFlags(argv) {
