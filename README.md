@@ -2,7 +2,9 @@
 
 [English](README.md) · [中文](README.zh.md)
 
-> **In-repo delivery board for humans and agents** — stages, handoffs, WIP, weekly report, and a local Timeline UI, all backed by one file in your git repo.
+> **Plan, owners, status, and handoff history in one JSON file next to your code** — no SaaS, no account; reviewed in every PR.
+
+The board is just a view. PM and engineers trust the same `delivery.json`: stages, WIP, weekly report, and an audit of moves that actually happened — so management and delivery work off one shared context, versioned with the repo.
 
 ![Synthetic demo: stage board → drag handoff → calendar Timeline → dark mode → install](docs/demo/demo.gif)
 
