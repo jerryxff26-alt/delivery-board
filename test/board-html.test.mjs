@@ -60,23 +60,28 @@ test('renderBoardHtml marks overdue cards', () => {
 test('renderBoardHtml handles empty projects', () => {
   const html = renderBoardHtml(createProject({ customer: 'Empty', template: 'lite' }))
   const body = html.split('<script>')[0]
-  // Empty stage columns auto-collapse to thin drop strips (no bare "(empty)").
-  assert.ok(body.includes('is-collapsed'))
+  // Empty columns stay full-width with an empty-state hint (no collapse strip).
+  assert.ok(!body.includes('is-collapsed'))
+  assert.ok(!body.includes('data-collapsed'))
+  assert.ok(body.includes('data-stage="backlog"'))
+  assert.ok(body.includes('No cards in this stage') || body.includes('Drop a card here'))
   assert.ok(!body.includes('(empty)'))
   assert.ok(!body.includes('Open risks'))
   assert.equal(body.includes('id="risks"'), true)
 })
 
-test('live board empty columns collapse and keep New card in the toolbar', () => {
+test('live board empty columns stay open and keep New card in the toolbar', () => {
   const live = renderBoardHtml(createProject({ customer: 'Empty', template: 'lite' }), {
     endpoint: '/board/test',
     revision: 'revision',
   })
   const body = live.split('<script>')[0]
-  assert.ok(body.includes('is-collapsed'))
+  assert.ok(!body.includes('is-collapsed'))
+  assert.ok(!body.includes('data-collapsed'))
   assert.ok(body.includes('New card'))
   assert.ok(body.includes('Lite Pipeline'))
-  assert.ok(body.includes('data-collapsed="1"'))
+  assert.ok(body.includes('Drop a card here'))
+  assert.ok(body.includes('col-hide'))
 })
 
 test('offline snapshots are visibly read-only and live boards prioritize drag over card-face stage selects', () => {
@@ -281,15 +286,15 @@ test('stage checklist copy flattens nested labels and adds a soft hint', () => {
   assert.match(en, /Stage checklist ·/)
 })
 
-test('empty columns collapse until expanded for the session', () => {
+test('empty columns render full-width with empty state and a header hide control', () => {
   const state = createProject({ customer: 'Empty', template: 'lite' })
-  const collapsed = renderColumns(state, { interactive: true, query: '', owner: '', limits: {}, expandedEmpty: {}, strings: boardStrings() })
-  assert.match(collapsed, /is-collapsed/)
-  assert.doesNotMatch(collapsed, /Drop a card here/)
-  const expanded = renderColumns(state, { interactive: true, query: '', owner: '', limits: {}, expandedEmpty: { backlog: true }, strings: boardStrings() })
-  assert.match(expanded, /data-stage="backlog"/)
-  assert.match(expanded, /Drop a card here/)
-  assert.ok(expanded.includes('is-collapsed')) // other empties still collapsed
+  const html = renderColumns(state, { interactive: true, query: '', owner: '', limits: {}, strings: boardStrings() })
+  assert.doesNotMatch(html, /is-collapsed/)
+  assert.match(html, /Drop a card here/)
+  assert.match(html, /data-stage="backlog"/)
+  assert.match(html, /class="col-hide"/)
+  assert.match(html, /aria-label="Hide column"/)
+  assert.doesNotMatch(html, /col-menu/)
 })
 
 test('hiddenStages omit columns, keep +N hidden control, and persist card counts', () => {
@@ -303,8 +308,10 @@ test('hiddenStages omit columns, keep +N hidden control, and persist card counts
   assert.match(body, /data-stage="doing"/)
   assert.match(body, /data-stage="review"/)
   assert.match(body, /\+1 hidden/)
-  // Hide lives on expanded column headers; Show on the +N panel
+  // Hide is a direct header icon button; Show lives on the +N panel
   assert.match(body, /data-action="hide"/)
+  assert.match(body, /class="col-hide"/)
+  assert.doesNotMatch(body, /col-menu|is-collapsed/)
   assert.match(body, /data-action="show"/)
   assert.match(live, /dataset\.action === 'hide'|action === 'hide'/)
   assert.match(live, /save\(button\.dataset\.action/)
@@ -337,4 +344,24 @@ test('card body click opens read-only detail with history; Edit only when intera
   assert.match(live, /renderCardDetail/)
   const offline = renderBoardHtml(state).split('<script>')[0]
   assert.match(offline, /id="detail-dialog"/)
+})
+
+test('card description appears on the board, detail, form and offline export', () => {
+  let state = createProject({ customer: 'Desc', template: 'lite' })
+  state = addCard(state, {
+    title: 'With desc',
+    stage: 'doing',
+    owner: 'Ada',
+    description: 'Short note\nSecond line that is long enough to clamp on the card face when rendered.',
+  })
+  const live = renderBoardHtml(state, { endpoint: '/board/test', revision: 'r1', locale: 'en' })
+  const body = live.split('<script>')[0]
+  assert.match(body, /class="card-desc"/)
+  assert.match(body, /Short note/)
+  assert.match(body, /name="description"/)
+  assert.match(body, /-webkit-line-clamp:\s*2/)
+  const detail = renderCardDetail(state.cards[0], state, boardStrings('en'), { canEdit: true })
+  assert.match(detail, /class="detail-desc"/)
+  assert.match(detail, /Short note/)
+  assert.match(detail, /Second line/)
 })

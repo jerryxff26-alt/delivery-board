@@ -18,7 +18,7 @@ Until the package is on npm, use the GitHub install path:
 
 ```bash
 npx github:jerryxff26-alt/delivery-board init ACME lite
-npx github:jerryxff26-alt/delivery-board card '{"title":"API integration","stage":"doing","owner":"Ada"}'
+npx github:jerryxff26-alt/delivery-board card '{"title":"API integration","stage":"doing","owner":"Ada","description":"Wire partner API"}'
 npx github:jerryxff26-alt/delivery-board open    # loopback board + Timeline; Ctrl+C to stop
 npx github:jerryxff26-alt/delivery-board weekly
 ```
@@ -66,7 +66,7 @@ If this saves your team a standup or a messy weekly paste, a [⭐ star](https://
 
 ## What you get
 
-- **Stage pipeline + cards** — each card has an owner, due date, acceptance criteria and Definition of Done (DoD). Stages can be added, renamed or removed after init (removing refuses while cards remain unless you migrate them).
+- **Stage pipeline + cards** — each card has an owner, optional description, due date, acceptance criteria and Definition of Done (DoD). Stages can be added, renamed or removed after init (removing refuses while cards remain unless you migrate them).
 - **Handoff audit trail** — moving a card to another stage records who handed what to whom, automatically.
 - **Weekly report** — a Markdown client report: pipeline snapshot, **shipped this week** (arrived at the terminal stage or archived), handoffs, open risks, and **risks resolved this week**. Optional `next_week` notes appear as **Next bets** (omitted when empty).
 - **Soft WIP limits** — optional per-stage `wipLimit` (Kanban-style). The board and move responses warn when a stage is over; moves are never blocked.
@@ -189,11 +189,11 @@ Fully custom stages are supported via the `stages` parameter. Stage checklists a
 | Tool | What it does |
 |---|---|
 | `delivery_init` | Initialize a project (prefer `lite`; or `default` / `governance` / custom stages) |
-| `delivery_card` | Add a card: title, stage, owner, due date, acceptance criteria, DoD |
+| `delivery_card` | Add a card: title, stage, owner, due date, optional description, acceptance criteria, DoD |
 | `delivery_move` | Move a card to another stage (records a handoff; owner can change). Same-stage owner changes are recorded as a decision, not a handoff |
 | `delivery_board` | Quick text board; excludes archived cards unless requested |
 | `delivery_open` | Editable local board URL (drag, create/edit) |
-| `delivery_update` | Edit title, owner, due, acceptance and DoD without moving |
+| `delivery_update` | Edit title, owner, due, description, acceptance and DoD without moving |
 | `delivery_log` | Log progress / risk / blocker / decision |
 | `delivery_weekly` | Client weekly report (Markdown): shipped / handoffs / open & resolved risks / next bets |
 

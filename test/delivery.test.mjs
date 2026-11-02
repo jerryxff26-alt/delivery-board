@@ -669,3 +669,22 @@ test('setStageHidden persists view preference and scrubbing on removeStage', () 
   const week = renderWeekly(setStageHidden(state, { stageId: 'doing', hidden: true }), '', '2020-01-06')
   assert.match(week, /Doing|doing|A/)
 })
+
+test('addCard stores trimmed description and omits empty', () => {
+  let state = createProject({ customer: 'D', template: 'lite' })
+  state = addCard(state, { title: 'A', stage: 'doing', description: '  hello  ' })
+  assert.equal(state.cards[0].description, 'hello')
+  state = addCard(state, { title: 'B', stage: 'doing', description: '   ' })
+  assert.equal(state.cards[1].description, undefined)
+  assert.ok(!('description' in state.cards[1]))
+})
+
+test('updateCard sets and clears description', () => {
+  let state = createProject({ customer: 'D', template: 'lite' })
+  state = addCard(state, { title: 'A', stage: 'doing', description: 'first' })
+  state = updateCard(state, { cardId: 'c1', description: '  second  ' })
+  assert.equal(state.cards[0].description, 'second')
+  state = updateCard(state, { cardId: 'c1', description: '' })
+  assert.equal(state.cards[0].description, undefined)
+  assert.ok(!('description' in state.cards[0]))
+})

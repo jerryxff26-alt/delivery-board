@@ -118,12 +118,13 @@ export function apply(ctx, config) {
   register(
     defineTool({
       name: 'delivery_card',
-      description: 'Daily: add a work card (title, stage, optional owner/due/acceptance/DoD)',
+      description: 'Daily: add a work card (title, stage, optional owner/due/description/acceptance/DoD)',
       parameters: {
         title: { type: 'string', description: 'Card title', required: true },
         stage: { type: 'string', description: 'Stage id or name (case-insensitive; must be unique)', required: true },
         owner: { type: 'string', description: 'Owner (optional)' },
         due: { type: 'string', description: 'Due date YYYY-MM-DD (optional)' },
+        description: { type: 'string', description: 'Optional card description' },
         acceptance: { type: 'array', items: { type: 'string' }, description: 'Acceptance criteria (optional)' },
         dod: { type: 'array', items: { type: 'string' }, description: 'Definition of Done (optional)' },
       },
@@ -274,12 +275,13 @@ export function apply(ctx, config) {
   }))
 
   register(defineTool({
-    name: 'delivery_update', description: 'Daily: edit active card metadata (title/owner/due/acceptance/DoD); omitted fields preserved',
+    name: 'delivery_update', description: 'Daily: edit active card metadata (title/owner/due/description/acceptance/DoD); omitted fields preserved',
     parameters: {
       card_id: { type: 'string', required: true, description: 'Card id or unique title' },
       title: { type: 'string', description: 'New title' },
       owner: { type: 'string', description: 'New owner; empty string clears' },
       due: { type: 'string', description: 'New due date YYYY-MM-DD; empty string clears' },
+      description: { type: 'string', description: 'Card description; empty string clears' },
       acceptance: { type: 'array', items: { type: 'string' }, description: 'Replace acceptance criteria' },
       dod: { type: 'array', items: { type: 'string' }, description: 'Replace DoD checklist' },
     }, output: textOutput, isConcurrencySafe: () => false,

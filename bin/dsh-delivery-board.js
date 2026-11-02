@@ -14,12 +14,13 @@ Commands (same shape as /delivery-admin in the DSH plugin):
   help
   init <customer> [template]              # e.g. init ACME lite
   init {"customer":"ACME","template":"lite"}
-  card <title> <stage> [owner]            # e.g. card API doing Ada
-  card {"title":"API","stage":"doing","owner":"Alice"}
+  card <title> <stage> [owner] [--description ...]
+  card {"title":"API","stage":"doing","owner":"Alice","description":"..."}
   board [--archived]
   open                                    # local editable board (Ctrl+C to stop)
   move <card|title> <stage|name>          # e.g. move API review
-  update {"card_id":"c1","owner":"Bob"}
+  update {"card_id":"c1","owner":"Bob","description":"..."}
+  update <card|title> --description ...
   archive <card|title> | restore <card|title>
   log {"type":"blocker","text":"..."}
   resolve <log_index>

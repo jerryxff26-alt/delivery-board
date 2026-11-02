@@ -66,7 +66,7 @@ dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 
 ## 你能得到什么
 
-- **阶段流水线 + 卡片**：每张卡有负责人、截止日期、验收标准和完成定义（DoD）。初始化后仍可增删改阶段（删除时若该阶段仍有卡片，需先 `migrate_to` 迁走）。
+- **阶段流水线 + 卡片**：每张卡有负责人、可选描述、截止日期、验收标准和完成定义（DoD）。初始化后仍可增删改阶段（删除时若该阶段仍有卡片，需先 `migrate_to` 迁走）。
 - **交接审计**：卡片跨阶段移动时自动记录交接（谁、从哪到哪、备注）。
 - **周报**：生成 Markdown 客户周报：流水线快照、**本周已交付**（进入末级阶段或归档）、交接、未关闭风险，以及**本周已消化风险**。可选 `next_week` 笔记会输出为 **Next bets（下周投注）**；为空则省略。
 - **软 WIP 上限**：阶段可选 `wipLimit`（看板风格）。看板与移动反馈会提示超限，但**从不拦截**移动。
@@ -159,11 +159,11 @@ dsh plugin --profile web add github:jerryxff26-alt/delivery-board
 | 工具 | 作用 |
 |---|---|
 | `delivery_init` | 初始化（优先 `lite`；或 `default` / `governance` / 自定义阶段） |
-| `delivery_card` | 新增卡片 |
+| `delivery_card` | 新增卡片（可含描述 description） |
 | `delivery_move` | 跨阶段移动并记录交接；同阶段只改负责人时记为决策 |
 | `delivery_board` | 文本看板 |
 | `delivery_open` | 本地可编辑看板 URL |
-| `delivery_update` | 修改卡片信息（不移动） |
+| `delivery_update` | 修改卡片信息（含描述；不移动） |
 | `delivery_log` | 记录进展 / 风险 / 阻塞 / 决策 |
 | `delivery_weekly` | 客户周报（Markdown）：已交付 / 交接 / 风险 / Next bets |
 

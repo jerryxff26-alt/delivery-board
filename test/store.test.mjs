@@ -105,3 +105,26 @@ test('validateState cleans hiddenStages unknowns and rejects bad shapes', () => 
   assert.throws(() => validateState({ ...base, hiddenStages: 'backlog' }, 'delivery.json'), /hiddenStages must be an array/)
   assert.throws(() => validateState({ ...base, hiddenStages: [1] }, 'delivery.json'), /hiddenStages\[0\] must be a non-empty string/)
 })
+
+test('validateState trims card description and drops empty', () => {
+  const base = createProject({ customer: 'S', template: 'lite' })
+  const card = {
+    id: 'c1',
+    title: 'T',
+    stage: 'backlog',
+    owner: '',
+    due: null,
+    acceptance: [],
+    dod: [],
+    createdAt: base.createdAt,
+  }
+  const withDesc = validateState({ ...base, cards: [{ ...card, description: '  note  ' }], lastCardNumber: 1 })
+  assert.equal(withDesc.cards[0].description, 'note')
+  const empty = validateState({ ...base, cards: [{ ...card, description: '   ' }], lastCardNumber: 1 })
+  assert.equal(empty.cards[0].description, undefined)
+  assert.ok(!('description' in empty.cards[0]))
+  assert.throws(
+    () => validateState({ ...base, cards: [{ ...card, description: 1 }], lastCardNumber: 1 }, 'delivery.json'),
+    /description must be a string/,
+  )
+})

@@ -48,3 +48,22 @@ test('hide and show parse stage refs', () => {
   assert.throws(() => parseDeliveryCommand('hide'), /hide <stage/)
   assert.throws(() => parseDeliveryCommand('show a b'), /show <stage/)
 })
+
+test('card and update accept --description flag', () => {
+  assert.deepEqual(
+    parseDeliveryCommand('card API doing Ada --description "Wire partner"'),
+    { action: 'card', args: { title: 'API', stage: 'doing', owner: 'Ada', description: 'Wire partner' } },
+  )
+  assert.deepEqual(
+    parseDeliveryCommand('card API doing --description=Hello'),
+    { action: 'card', args: { title: 'API', stage: 'doing', description: 'Hello' } },
+  )
+  assert.deepEqual(
+    parseDeliveryCommand('update c1 --description "New notes"'),
+    { action: 'update', args: { card_id: 'c1', description: 'New notes' } },
+  )
+  assert.deepEqual(
+    parseDeliveryCommand('update {"card_id":"c1","description":"JSON"}'),
+    { action: 'update', args: { card_id: 'c1', description: 'JSON' } },
+  )
+})
