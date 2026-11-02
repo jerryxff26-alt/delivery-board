@@ -24,6 +24,7 @@ Commands (same shape as /delivery-admin in the DSH plugin):
   log {"type":"blocker","text":"..."}
   resolve <log_index>
   gate <stage|name> <gate_index> [true|false]
+  hide <stage|name> | show <stage|name>
   stage_add|stage_update|stage_remove {...}
   weekly [YYYY-MM-DD] | {"week_start":"...","next_week":"..."}
   html

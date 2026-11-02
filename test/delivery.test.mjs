@@ -11,6 +11,7 @@ import {
   appendLog,
   resolveLog,
   setGateDone,
+  setStageHidden,
   addStage,
   updateStage,
   removeStage,
@@ -649,4 +650,22 @@ test('stage after=name and migrate_to=name resolve', () => {
   s = removeStage(s, { stageId: 'Hardening', migrateTo: 'Doing' })
   assert.ok(!s.pipeline.some((x) => x.name === 'Hardening'))
   assert.equal(s.cards.find((c) => c.title === 'A').stage, 'doing')
+})
+
+test('setStageHidden persists view preference and scrubbing on removeStage', () => {
+  let state = createProject({ customer: 'Hide', template: 'lite' })
+  state = addCard(state, { title: 'A', stage: 'doing' })
+  const hidden = setStageHidden(state, { stageId: 'Backlog', hidden: true })
+  assert.deepEqual(hidden.hiddenStages, ['backlog'])
+  assert.equal(setStageHidden(hidden, { stageId: 'backlog', hidden: true }), hidden)
+  const shown = setStageHidden(hidden, { stageId: 'backlog', hidden: false })
+  assert.equal(shown.hiddenStages, undefined)
+  let withHidden = setStageHidden(state, { stageId: 'review', hidden: true })
+  withHidden = setStageHidden(withHidden, { stageId: 'live', hidden: true })
+  const removed = removeStage(withHidden, { stageId: 'review' })
+  assert.deepEqual(removed.hiddenStages, ['live'])
+  assert.ok(!removed.pipeline.some((stage) => stage.id === 'review'))
+  // Weekly ignores hide preference (still reports the card stage).
+  const week = renderWeekly(setStageHidden(state, { stageId: 'doing', hidden: true }), '', '2020-01-06')
+  assert.match(week, /Doing|doing|A/)
 })

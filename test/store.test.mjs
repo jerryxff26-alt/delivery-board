@@ -95,3 +95,13 @@ test('trusted workspace override pins reads while retaining the original agent c
   assert.deepEqual(calls[0], ['resolve', 'delivery.json', { cwd: '/original-workspace', signal }])
   assert.equal(calls[3][4].agent, exec.agent)
 })
+
+test('validateState cleans hiddenStages unknowns and rejects bad shapes', () => {
+  const base = createProject({ customer: 'OK', template: 'lite' })
+  const cleaned = validateState({ ...base, hiddenStages: ['backlog', 'nope', 'backlog'] })
+  assert.deepEqual(cleaned.hiddenStages, ['backlog'])
+  const empty = validateState({ ...base, hiddenStages: ['nope'] })
+  assert.equal(empty.hiddenStages, undefined)
+  assert.throws(() => validateState({ ...base, hiddenStages: 'backlog' }, 'delivery.json'), /hiddenStages must be an array/)
+  assert.throws(() => validateState({ ...base, hiddenStages: [1] }, 'delivery.json'), /hiddenStages\[0\] must be a non-empty string/)
+})

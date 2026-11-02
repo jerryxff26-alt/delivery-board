@@ -70,7 +70,7 @@ If this saves your team a standup or a messy weekly paste, a [⭐ star](https://
 - **Handoff audit trail** — moving a card to another stage records who handed what to whom, automatically.
 - **Weekly report** — a Markdown client report: pipeline snapshot, **shipped this week** (arrived at the terminal stage or archived), handoffs, open risks, and **risks resolved this week**. Optional `next_week` notes appear as **Next bets** (omitted when empty).
 - **Soft WIP limits** — optional per-stage `wipLimit` (Kanban-style). The board and move responses warn when a stage is over; moves are never blocked.
-- **Local editable board** — ask `/delivery Open the editable board`; the tool serves a mouse drag-and-drop board on `127.0.0.1` that saves back to the same delivery state. Archive/restore, risk/blocker logging, and trackable gate checklists are available on the board. Accessibility fallback: Edit → Stage. Board chrome follows the browser locale (zh-CN when appropriate).
+- **Local editable board** — ask `/delivery Open the editable board`; the tool serves a mouse drag-and-drop board on `127.0.0.1` that saves back to the same delivery state. Archive/restore, risk/blocker logging, and trackable stage checklists are available on the board. Accessibility fallback: Edit → Stage. Board chrome follows the browser locale (zh-CN when appropriate).
 - **Timeline view** — a calendar-axis Gantt of every card: bars follow real dates (created → each stage handoff → shipped / archived / today), with a today line, week and month gridlines, ◆ due markers (red when overdue), and a tray for cards with no dates yet. Same search and owner filters as the kanban; click a title to edit. Light and dark themes follow the OS.
 - **Offline HTML snapshot** — a single read-only file teammates without DSH can open.
 
@@ -174,13 +174,13 @@ For linked desktop development, fully quit and reopen DSH after updating the plu
 
 ## Pipeline templates
 
-| Template | Stages | Gates |
+| Template | Stages | Stage checklist |
 |---|---|---|
 | **`lite` (Lite Pipeline)** — recommended quickstart | Backlog → Doing → Review → Live | None |
 | `default` (ToB Delivery Pipeline) | Client Requirements → BA Analysis → TL Design → Development → Testing → DevSecOps Launch → Live | 1–2 per stage (e.g. acceptance criteria frozen, security scan passed) |
 | `governance` (Governance Pipeline) | Plan → Analyze → Design → Build → Test → Deploy → Live | Quality / risk / security sign-offs (e.g. rollback plan ready) |
 
-Fully custom stages are supported via the `stages` parameter. Gates are trackable checklists (persisted as gateDone); they do not hard-block card moves. Prefer `lite` unless you need the longer ToB or governance pipelines.
+Fully custom stages are supported via the `stages` parameter. Stage checklists are trackable (persisted as gateDone); they do not hard-block card moves. Prefer `lite` unless you need the longer ToB or governance pipelines.
 
 ## Tools
 
@@ -204,7 +204,7 @@ Fully custom stages are supported via the `stages` parameter. Gates are trackabl
 | `delivery_archive` / `delivery_restore` | Hide a card without deleting history / return it to its original stage |
 | `delivery_board_html` | Read-only standalone HTML snapshot |
 | `delivery_resolve` | Mark an open risk/blocker log entry resolved by index |
-| `delivery_gate` | Toggle/set a stage gate checklist item (trackable, not a hard blocker) |
+| `delivery_gate` | Toggle/set a stage checklist item (trackable, not a hard blocker) |
 | `delivery_stage_add` / `delivery_stage_update` / `delivery_stage_remove` | Evolve the pipeline after init (remove requires `migrate_to` if cards remain; stages accept optional soft `wip_limit`) |
 
 ## Editable local board vs offline HTML

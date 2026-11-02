@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createProject, addCard, archiveCard, moveCard, appendLog, resolveLog } from '../lib/delivery.js'
+import { createProject, addCard, archiveCard, moveCard, appendLog, resolveLog, setStageHidden } from '../lib/delivery.js'
 import { renderBoardHtml } from '../lib/board-html.js'
-import { formatTimestamp, renderColumns, renderArchive, renderRisks, boardStrings } from '../lib/board-view.js'
+import { formatTimestamp, renderColumns, renderArchive, renderRisks, renderCardDetail, boardStrings } from '../lib/board-view.js'
 
 function sampleState() {
   let s = createProject({ customer: 'ACME <Group>', template: 'governance' })
@@ -60,22 +60,23 @@ test('renderBoardHtml marks overdue cards', () => {
 test('renderBoardHtml handles empty projects', () => {
   const html = renderBoardHtml(createProject({ customer: 'Empty', template: 'lite' }))
   const body = html.split('<script>')[0]
-  // Offline/read-only empty columns use soft emptyReadonly copy (not bare "(empty)").
-  assert.ok(body.includes('No cards in this stage'))
+  // Empty stage columns auto-collapse to thin drop strips (no bare "(empty)").
+  assert.ok(body.includes('is-collapsed'))
   assert.ok(!body.includes('(empty)'))
   assert.ok(!body.includes('Open risks'))
   assert.equal(body.includes('id="risks"'), true)
 })
 
-test('live board empty columns emphasize New card', () => {
+test('live board empty columns collapse and keep New card in the toolbar', () => {
   const live = renderBoardHtml(createProject({ customer: 'Empty', template: 'lite' }), {
     endpoint: '/board/test',
     revision: 'revision',
   })
   const body = live.split('<script>')[0]
-  assert.ok(body.includes('Drop a card here · New card'))
+  assert.ok(body.includes('is-collapsed'))
   assert.ok(body.includes('New card'))
   assert.ok(body.includes('Lite Pipeline'))
+  assert.ok(body.includes('data-collapsed="1"'))
 })
 
 test('offline snapshots are visibly read-only and live boards prioritize drag over card-face stage selects', () => {
@@ -262,4 +263,69 @@ test('v0.3.0 polish-freeze: title+meta face, touch ⋯ overlay, quiet secondary 
   // Secondary views: no heavy surface panel chrome on archive/timeline wrappers.
   assert.match(body, /\.archive-panel \{[^}]*background: transparent/)
   assert.match(body, /\.timeline-panel \{[^}]*background: transparent/)
+})
+
+test('stage checklist copy flattens nested labels and adds a soft hint', () => {
+  const html = renderBoardHtml(createProject({ customer: 'X', template: 'default' }), { locale: 'zh-CN' })
+  const body = html.split('<script>')[0]
+  assert.match(body, /阶段检查清单 ·/)
+  assert.match(body, /每个阶段完成前要确认的事项，只做提醒，不拦拖拽/)
+  assert.doesNotMatch(body, /关卡 ·/)
+  assert.doesNotMatch(body, /class="board-gate-name"/)
+  assert.match(body, /<details class="gates"><summary>[^<]+ · \d+\/\d+<\/summary>/)
+  const en = renderBoardHtml(createProject({ customer: 'X', template: 'default' }), { locale: 'en' }).split('<script>')[0]
+  assert.match(en, /Stage checklist ·/)
+})
+
+test('empty columns collapse until expanded for the session', () => {
+  const state = createProject({ customer: 'Empty', template: 'lite' })
+  const collapsed = renderColumns(state, { interactive: true, query: '', owner: '', limits: {}, expandedEmpty: {}, strings: boardStrings() })
+  assert.match(collapsed, /is-collapsed/)
+  assert.doesNotMatch(collapsed, /Drop a card here/)
+  const expanded = renderColumns(state, { interactive: true, query: '', owner: '', limits: {}, expandedEmpty: { backlog: true }, strings: boardStrings() })
+  assert.match(expanded, /data-stage="backlog"/)
+  assert.match(expanded, /Drop a card here/)
+  assert.ok(expanded.includes('is-collapsed')) // other empties still collapsed
+})
+
+test('hiddenStages omit columns, keep +N hidden control, and persist card counts', () => {
+  let state = createProject({ customer: 'Hide', template: 'lite' })
+  state = addCard(state, { title: 'Work', stage: 'doing', owner: 'Ada' })
+  state = setStageHidden(state, { stageId: 'backlog', hidden: true })
+  state = setStageHidden(state, { stageId: 'doing', hidden: true })
+  assert.deepEqual(state.hiddenStages, ['backlog', 'doing'])
+  const live = renderBoardHtml(state, { endpoint: '/board/test', revision: 'r1', locale: 'en' })
+  const body = live.split('<script>')[0]
+  assert.doesNotMatch(body, /data-stage="backlog"/)
+  assert.doesNotMatch(body, /data-stage="doing"/)
+  assert.match(body, /data-stage="review"/)
+  assert.match(body, /\+2 hidden · 1/)
+  assert.match(body, /data-action="hide"/)
+  assert.match(body, /data-action="show"/)
+  assert.match(live, /dataset\.action === 'hide'|action === 'hide'/)
+  assert.match(live, /save\(button\.dataset\.action/)
+  const offline = renderBoardHtml(state, { locale: 'en' }).split('<script>')[0]
+  assert.doesNotMatch(offline, /data-stage="doing"/)
+  assert.match(offline, /\+2 hidden · 1/)
+})
+
+test('card body click opens read-only detail with history; Edit only when interactive', () => {
+  let state = sampleState()
+  state = appendLog(state, { type: 'decision', text: 'Go ahead', cardId: 'c1' })
+  const detail = renderCardDetail(state.cards[0], state, boardStrings('en'), { canEdit: true })
+  assert.match(detail, /SSO login/)
+  assert.match(detail, /Acceptance criteria/)
+  assert.match(detail, /Definition of done/)
+  assert.match(detail, /Handoffs &amp; decisions/)
+  assert.match(detail, /PRD reviewed/)
+  assert.match(detail, /Go ahead/)
+  assert.match(detail, /data-action="detail-edit"/)
+  const ro = renderCardDetail(state.cards[0], state, boardStrings('en'), { canEdit: false })
+  assert.doesNotMatch(ro, /data-action="detail-edit"/)
+  const live = renderBoardHtml(state, { endpoint: '/board/x', revision: 'r' })
+  assert.match(live, /id="detail-dialog"/)
+  assert.match(live, /showDetail\(/)
+  assert.match(live, /renderCardDetail/)
+  const offline = renderBoardHtml(state).split('<script>')[0]
+  assert.match(offline, /id="detail-dialog"/)
 })

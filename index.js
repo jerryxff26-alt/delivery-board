@@ -70,7 +70,7 @@ export function apply(ctx, config) {
       'Codebase-native delivery: use the delivery skill for repository-grounded planning, acceptance criteria, handoffs and reporting.',
       'The /delivery skill is model-led. Load it before delivery task actions when it is available in the skill catalog; explicit /delivery invocations already include its instructions.',
       'Daily loop (prefer these tools): delivery_init, delivery_card, delivery_move, delivery_board, delivery_open, delivery_update, delivery_weekly, delivery_log. Prefer template lite for new projects.',
-      'Advanced (only when asked): delivery_stage_*, delivery_gate, delivery_resolve, delivery_board_html, delivery_archive, delivery_restore. /delivery-admin help is the deterministic escape hatch, not the normal skill workflow.',
+      'Advanced (only when asked): delivery_stage_*, delivery_gate, delivery_hide, delivery_show, delivery_resolve, delivery_board_html, delivery_archive, delivery_restore. /delivery-admin help is the deterministic escape hatch, not the normal skill workflow.',
       `Delivery state is stored at the session workspace root (default file ${config.fileName}). ${config.boardFile} is a read-only export; delivery_open returns the editable machine-local board URL.`,
     ].join('\n'),
   })
@@ -310,6 +310,32 @@ export function apply(ctx, config) {
         return applyAction(state, 'gate', { ...args, stage_id: stageId })
       })
       return ok(`Gate updated on ${stageId}: ${label ?? args.gate_index}`)
+    },
+  }))
+
+  register(defineTool({
+    name: 'delivery_hide',
+    description: 'Advanced: hide a stage column on the board (view preference; cards stay counted and reachable)',
+    parameters: {
+      stage_id: { type: 'string', required: true, description: 'Stage id or name to hide' },
+    },
+    output: textOutput, isConcurrencySafe: () => false,
+    async execute(args, exec) {
+      await mutateState(ctx, exec, config.fileName, (state) => applyAction(state, 'hide', args))
+      return ok(`Stage hidden [${args.stage_id}]`)
+    },
+  }))
+
+  register(defineTool({
+    name: 'delivery_show',
+    description: 'Advanced: show a previously hidden stage column on the board',
+    parameters: {
+      stage_id: { type: 'string', required: true, description: 'Stage id or name to show' },
+    },
+    output: textOutput, isConcurrencySafe: () => false,
+    async execute(args, exec) {
+      await mutateState(ctx, exec, config.fileName, (state) => applyAction(state, 'show', args))
+      return ok(`Stage shown [${args.stage_id}]`)
     },
   }))
 

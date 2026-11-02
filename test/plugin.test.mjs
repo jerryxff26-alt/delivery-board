@@ -32,9 +32,9 @@ function fixture() {
   return { tools, commands, skills, prompts, exec, files, writes, signal }
 }
 
-test('all sixteen tools render desktop-compatible text content blocks', () => {
+test('all eighteen tools render desktop-compatible text content blocks', () => {
   const { tools } = fixture()
-  assert.equal(tools.size, 16)
+  assert.equal(tools.size, 18)
   for (const tool of tools.values()) {
     const content = tool.output.render({}, { text: 'test result' })
     assert.deepEqual(content, [{ type: 'text', text: 'test result' }], tool.name)
@@ -53,7 +53,7 @@ test('systemPrompt and tool descriptions prefer the daily loop', () => {
   for (const name of ['delivery_init', 'delivery_card', 'delivery_move', 'delivery_board', 'delivery_open', 'delivery_update', 'delivery_weekly', 'delivery_log']) {
     assert.match(tools.get(name).description, /^Daily:/, name)
   }
-  for (const name of ['delivery_gate', 'delivery_resolve', 'delivery_board_html', 'delivery_archive', 'delivery_restore', 'delivery_stage_add']) {
+  for (const name of ['delivery_gate', 'delivery_hide', 'delivery_show', 'delivery_resolve', 'delivery_board_html', 'delivery_archive', 'delivery_restore', 'delivery_stage_add']) {
     assert.match(tools.get(name).description, /^Advanced:/, name)
   }
 })

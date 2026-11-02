@@ -30,7 +30,7 @@ Use this set for almost all requests:
 | Weekly client report | `delivery_weekly` |
 | Progress / risk / blocker | `delivery_log` |
 
-Do **not** reach for advanced tools unless the user explicitly asks for pipeline surgery, gate checklists, archive/restore, offline HTML export, or resolving a log by index.
+Do **not** reach for advanced tools unless the user explicitly asks for pipeline surgery, stage checklists, archive/restore, offline HTML export, or resolving a log by index.
 
 ## Start from the current context
 
@@ -75,7 +75,7 @@ Advanced (keep available; use only when explicitly needed):
 | Archive or resume work | `delivery_archive` / `delivery_restore`: archiving keeps history; restore before editing or moving an archived card |
 | Share an offline view | `delivery_board_html`: a read-only HTML snapshot, not a writable board |
 | Resolve a risk/blocker by log index | `delivery_resolve` |
-| Toggle a stage gate checklist | `delivery_gate` (trackable; does not block moves) |
+| Toggle a stage checklist | `delivery_gate` (trackable; does not block moves) |
 | Soft WIP or pipeline surgery | `delivery_stage_add` / `delivery_stage_update` / `delivery_stage_remove` with optional `wip_limit` |
 
 For an explicit card change, perform the requested tool operation and verify the result; do not require a new overall plan. Before a handoff, distinguish available evidence from unmet criteria or missing sign-off. Gates are human-confirmed/display-only: do not claim a tool enforced them or tests passed unless actual evidence supports that claim. A same-stage owner change is an update, not a new cross-stage handoff.

@@ -40,3 +40,11 @@ test('positional init and card parse without JSON', () => {
   assert.deepEqual(parseDeliveryCommand('archive "Pay wall"'), { action: 'archive', args: { card_id: 'Pay wall' } })
   assert.deepEqual(parseDeliveryCommand('gate "In progress" 0 true'), { action: 'gate', args: { stage_id: 'In progress', gate_index: 0, done: true } })
 })
+
+test('hide and show parse stage refs', () => {
+  assert.deepEqual(parseDeliveryCommand('hide backlog'), { action: 'hide', args: { stage_id: 'backlog' } })
+  assert.deepEqual(parseDeliveryCommand('show "In progress"'), { action: 'show', args: { stage_id: 'In progress' } })
+  assert.deepEqual(parseDeliveryCommand('hide {"stage_id":"doing"}'), { action: 'hide', args: { stage_id: 'doing' } })
+  assert.throws(() => parseDeliveryCommand('hide'), /hide <stage/)
+  assert.throws(() => parseDeliveryCommand('show a b'), /show <stage/)
+})
