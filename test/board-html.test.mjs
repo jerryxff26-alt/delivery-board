@@ -296,18 +296,23 @@ test('hiddenStages omit columns, keep +N hidden control, and persist card counts
   let state = createProject({ customer: 'Hide', template: 'lite' })
   state = addCard(state, { title: 'Work', stage: 'doing', owner: 'Ada' })
   state = setStageHidden(state, { stageId: 'backlog', hidden: true })
-  state = setStageHidden(state, { stageId: 'doing', hidden: true })
-  assert.deepEqual(state.hiddenStages, ['backlog', 'doing'])
+  assert.deepEqual(state.hiddenStages, ['backlog'])
   const live = renderBoardHtml(state, { endpoint: '/board/test', revision: 'r1', locale: 'en' })
   const body = live.split('<script>')[0]
   assert.doesNotMatch(body, /data-stage="backlog"/)
-  assert.doesNotMatch(body, /data-stage="doing"/)
+  assert.match(body, /data-stage="doing"/)
   assert.match(body, /data-stage="review"/)
-  assert.match(body, /\+2 hidden · 1/)
+  assert.match(body, /\+1 hidden/)
+  // Hide lives on expanded column headers; Show on the +N panel
   assert.match(body, /data-action="hide"/)
   assert.match(body, /data-action="show"/)
   assert.match(live, /dataset\.action === 'hide'|action === 'hide'/)
   assert.match(live, /save\(button\.dataset\.action/)
+  state = setStageHidden(state, { stageId: 'doing', hidden: true })
+  assert.deepEqual(state.hiddenStages, ['backlog', 'doing'])
+  const both = renderBoardHtml(state, { endpoint: '/board/test', revision: 'r1', locale: 'en' }).split('<script>')[0]
+  assert.doesNotMatch(both, /data-stage="doing"/)
+  assert.match(both, /\+2 hidden · 1/)
   const offline = renderBoardHtml(state, { locale: 'en' }).split('<script>')[0]
   assert.doesNotMatch(offline, /data-stage="doing"/)
   assert.match(offline, /\+2 hidden · 1/)
