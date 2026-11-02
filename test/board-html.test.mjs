@@ -158,8 +158,12 @@ test('English demo data keeps live, read-only and dynamic UI labels free of Chin
     assert.match(emptyArchive, /No matching archived cards/)
   }
   const timestamp = '2026-10-07T03:00:00Z'
-  assert.equal(formatTimestamp(timestamp, 'en-US'), new Date(timestamp).toLocaleString('en-US', { hour12: false, timeZoneName: 'short' }))
-  assert.equal(formatTimestamp(timestamp, 'zh-CN'), new Date(timestamp).toLocaleString('zh-CN', { hour12: false, timeZoneName: 'short' }))
+  const sameYear = formatTimestamp(timestamp)
+  assert.match(sameYear, /^\d{2}-\d{2} \d{2}:\d{2}$/)
+  assert.equal(formatTimestamp(timestamp, 'en-US'), sameYear)
+  assert.equal(formatTimestamp(timestamp, 'zh-CN'), sameYear)
+  const older = formatTimestamp('2025-11-02T08:54:00')
+  assert.match(older, /^2025-11-02 \d{2}:\d{2}$/)
   assert.match(boardStrings('zh-CN').refresh, /刷新/)
   assert.match(renderBoardHtml(state, { locale: 'zh-CN' }), /lang="zh-CN"/)
   assert.match(renderBoardHtml(state, { locale: 'zh-CN' }), /刷新/)
