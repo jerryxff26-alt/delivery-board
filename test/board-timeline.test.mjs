@@ -140,6 +140,33 @@ test('renderCard is title+meta with grab drag and localized menu', () => {
   assert.ok(!shipped.includes('is-overdue'))
 })
 
+test('terminal-stage cards show as done with their due date on the face', () => {
+  let s = createProject({ customer: 'ACME', template: 'lite' })
+  const terminal = s.pipeline[s.pipeline.length - 1].id
+  s = addCard(s, { title: 'Shipped work', stage: terminal, owner: 'amy', due: '2026-10-19' })
+  s = addCard(s, { title: 'Open work', stage: s.pipeline[1].id, owner: 'bob', due: '2026-11-20' })
+  const done = renderCard(s.cards[0], s, true, boardStrings('en-US'))
+  assert.match(done, /class="[^"]*is-done/)
+  assert.match(done, /class="done-meta"[^>]*>✓ 2026-10-19/)
+  assert.doesNotMatch(done, /class="due/)
+  assert.ok(!HAN.test(done))
+  const open = renderCard(s.cards[1], s, true, boardStrings('en-US'))
+  assert.doesNotMatch(open, /is-done|done-meta/)
+  assert.match(open, /class="due"/)
+  const zh = renderCard(s.cards[0], s, true, boardStrings('zh-CN'))
+  assert.match(zh, /class="[^"]*is-done/)
+  assert.match(zh, /已完成/)
+})
+
+test('a card built straight into the terminal stage ships on its due date', () => {
+  let s = createProject({ customer: 'ACME', template: 'lite' })
+  const terminal = s.pipeline[s.pipeline.length - 1].id
+  s = addCard(s, { title: 'Shipped work', stage: terminal, start: '2026-10-16', due: '2026-10-19' })
+  const tl = cardTimeline(s.cards[0], s, NOW)
+  assert.equal(tl.shipped, new Date(2026, 9, 19).getTime())
+  assert.equal(tl.scheduleStart, new Date(2026, 9, 16).getTime())
+})
+
 test('timeline bars use shared accent — no per-stage --stage vars or stage-dot', () => {
   const { s } = timedState()
   const html = renderTimeline(s, { interactive: false, query: '', owner: '', locale: 'en-US', strings: boardStrings('en-US'), now: Date.parse('2026-10-28T12:00:00+08:00') })
