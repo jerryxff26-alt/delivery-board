@@ -1,67 +1,51 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { dirname } from 'node:path'
-import { loadDeliverySkill } from '../lib/skill.js'
-import { commandHelp, registerDeliveryCommand } from '../lib/commands.js'
+import { readFileSync, existsSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { commandHelp } from '../lib/commands.js'
 import { renderBoardHtml } from '../lib/board-html.js'
-import { addCard, createProject } from '../lib/delivery.js'
+import { createProject, addCard } from '../lib/delivery.js'
 
-test('bundled skill exposes canonical metadata, portable resources and English planning instructions', () => {
-  const skill = loadDeliverySkill()
-  const source = readFileSync(skill.path, 'utf8')
-  assert.equal(skill.name, 'delivery')
-  assert.match(source, new RegExp(`^name: ${skill.name}$`, 'm'))
-  assert.ok(source.includes(`description: ${skill.description}\n`))
-  assert.equal(skill.resourceBase.kind, 'directory')
-  assert.equal(skill.resourceBase.path.replace(/[/\\]$/, ''), dirname(skill.path))
-  assert.deepEqual(skill.invocation, { modelInvocable: true, userInvocable: true })
-  assert.doesNotMatch(skill.content, /^---/)
-  assert.doesNotMatch(skill.content, /\p{Script=Han}/u)
-  for (const name of ['delivery_init', 'delivery_card', 'delivery_move', 'delivery_board', 'delivery_open', 'delivery_update', 'delivery_archive', 'delivery_restore', 'delivery_board_html', 'delivery_log', 'delivery_weekly']) assert.ok(skill.content.includes(name), name)
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const skillPath = join(root, 'SKILL.md')
+
+test('the repository root is a skill: frontmatter, body and bundled script', () => {
+  const source = readFileSync(skillPath, 'utf8')
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]+)$/.exec(source)
+  assert.ok(match, 'SKILL.md needs frontmatter and a body')
+  const [, frontmatter, body] = match
+  assert.match(frontmatter, /^name: delivery$/m)
+  assert.match(frontmatter, /^description: \S.+$/m)
+  assert.doesNotMatch(frontmatter.split('\n').find((line) => line.startsWith('description: ')) ?? '', /\n/)
+  assert.ok(body.trim().length > 500)
+  assert.ok(existsSync(join(root, 'scripts/delivery.mjs')), 'the skill must ship its script')
+  assert.ok(statSync(join(root, 'scripts/delivery.mjs')).size > 0)
 })
 
-test('skill distinguishes repository-grounded proposals from authorized persisted operations', () => {
-  const { content } = loadDeliverySkill()
-  for (const phrase of ['Plan before bulk creation', 'repository', 'external blockers', 'Get approval for the proposed batch', 'unknown due dates unset', 'do not initialize again or blindly recreate cards', 'A write failure or stale-state conflict is not success', 'not permission']) {
-    // The initialization boundary is stated as "do not treat it as permission".
-    if (phrase === 'not permission') assert.match(content, /do not treat it as permission/)
-    else assert.ok(content.includes(phrase), phrase)
+test('the skill teaches commands instead of the removed delivery_* tools', () => {
+  const body = readFileSync(skillPath, 'utf8').split(/^---$/m).slice(2).join('---')
+  assert.match(body, /scripts\/delivery\.mjs/)
+  for (const command of ['init', 'card', 'move', 'board', 'open', 'update', 'weekly', 'log']) {
+    assert.match(body, new RegExp(`\\b${command}\\b`), command)
   }
-  assert.match(content, /week_start/)
-  assert.match(content, /week_label.*heading/)
-  assert.match(content, /human-confirmed\/display-only/)
-  assert.match(content, /Do not substitute shell commands or direct JSON edits/)
+  assert.doesNotMatch(body, /delivery_(init|card|move|board|open|update|weekly|log)\b/)
+  assert.doesNotMatch(body, /\/delivery-admin\b/)
+  assert.match(body, /--actor/)
 })
 
-test('skill surfaces First 60s and Daily loop before advanced tools', () => {
-  const { content } = loadDeliverySkill()
-  assert.match(content, /## First 60s in DSH/)
-  assert.match(content, /## Daily loop \(only these\)/)
-  assert.match(content, /prefer template `lite`|prefer the `lite` template/)
-  assert.ok(content.indexOf('Daily loop') < content.indexOf('Advanced (keep available'))
-  for (const name of ['delivery_init', 'delivery_card', 'delivery_move', 'delivery_board', 'delivery_open', 'delivery_update', 'delivery_weekly', 'delivery_log']) {
-    assert.ok(content.includes(name), name)
+test('the help text covers every command the skill promises', () => {
+  for (const command of ['init', 'card', 'board', 'open', 'move', 'update', 'dod add', 'dod check', 'archive', 'restore', 'archive-board', 'log', 'resolve', 'hide', 'show', 'stage_add', 'stage_update', 'stage_remove', 'weekly', 'html']) {
+    assert.ok(commandHelp.includes(command), command)
   }
+  assert.doesNotMatch(commandHelp, /\/delivery-admin/)
 })
 
-test('only the advanced command namespace bypasses the model', async () => {
-  const registered = []
-  let calls = 0
-  registerDeliveryCommand({ commands: { register(command) { registered.push(command) } } }, async () => { calls++; return 'done' })
-  assert.deepEqual(registered.map(command => command.name), ['delivery-admin'])
-  assert.match(commandHelp, /\/delivery-admin open/)
-  assert.doesNotMatch(commandHelp, /\/delivery\s+(?:init|move|help|open)/)
-  const command = registered[0]
-  assert.equal((await command.handler({ rawInput: 'help' })).kind, 'success')
-  assert.equal(calls, 0)
-  assert.equal((await command.handler({ rawInput: 'Plan this repository' })).kind, 'error')
-  assert.equal(calls, 0)
-})
-
-test('copied handoffs use advanced commands, not skill prompts', () => {
-  const state = addCard(createProject({ customer: 'Skill Demo', template: 'governance' }), { title: 'API', stage: 'build' })
-  const html = renderBoardHtml(state)
-  assert.match(html, /data-cmd="\/delivery-admin move c1 test"/)
-  assert.doesNotMatch(html, /\/delivery (?:open|move|help)/)
+test('the board copies a runnable command when a command prefix is supplied', () => {
+  const state = addCard(createProject({ customer: 'Skill Demo', template: 'lite' }), { title: 'API', stage: 'doing' })
+  const html = renderBoardHtml(state, { command: 'node /opt/delivery/scripts/delivery.mjs' })
+  assert.match(html, /data-cmd="node \/opt\/delivery\/scripts\/delivery\.mjs move c1 review"/)
+  const fallback = renderBoardHtml(state)
+  assert.match(fallback, /data-cmd="delivery move c1 review"/)
 })

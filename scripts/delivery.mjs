@@ -1,16 +1,18 @@
 #!/usr/bin/env node
-// Standalone CLI: stages, handoffs, WIP, weekly report, Timeline board — no DSH required.
+// dsh-delivery-board — single entry point for the delivery skill.
+// Deterministic mutations on an in-repo delivery.json, the weekly report and the local board.
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createStandaloneSession, parseDeliveryCommand, commandHelp } from '../lib/standalone.js'
 
-const usage = `dsh-delivery-board — codebase-native delivery board (standalone)
+const usage = `delivery — codebase-native delivery board
 
 Usage:
-  npx dsh-delivery-board <command> [args...]
-  npx dsh-delivery-board --cwd <dir> --file delivery.json <command> ...
+  node scripts/delivery.mjs <command> [args...]
+  node scripts/delivery.mjs --cwd <dir> --file delivery.json --actor <name> <command> ...
 
-Commands (same shape as /delivery-admin in the DSH plugin):
+Commands:
   help
   init <customer> [template]              # e.g. init ACME lite
   init {"customer":"ACME","template":"lite"}
@@ -19,13 +21,13 @@ Commands (same shape as /delivery-admin in the DSH plugin):
   board [--archived]
   open                                    # local editable board (Ctrl+C to stop)
   move <card|title> <stage|name>          # e.g. move API review
-  update {"card_id":"c1","owner":"Bob","start":"...","due":"...","description":"..."}
+  update {"card_id":"c1","stage":"review","owner":"Bob","due":"2026-11-20"}
   update <card|title> --start ... | --due ... | --description ...
   dod add <card|title> <text>
   dod check <card|title> <index> [true|false]
   archive <card|title> | restore <card|title>
   archive-board                           # snapshot to delivery-archive/, then reset empty board
-  log {"type":"blocker","text":"..."}
+  log {"type":"blocker","text":"...","card_id":"c1"}
   resolve <log_index>
   hide <stage|name> | show <stage|name>
   stage_add|stage_update|stage_remove {...}
@@ -33,22 +35,40 @@ Commands (same shape as /delivery-admin in the DSH plugin):
   html
   # view an archived board: --file delivery-archive/<file>.json open|html
 
-Also works as a DSH plugin:
-  dsh plugin --profile web add github:jerryxff26-alt/delivery-board
-`
+Options:
+  --cwd, -C <dir>      project directory (default: current directory)
+  --file, -f <name>    state file name (default delivery.json)
+  --board-file <name>  HTML export name (default delivery-board.html)
+  --actor, -a <name>   who is making the change (default: $DELIVERY_ACTOR, then git config user.name)
+
+The skill (SKILL.md) is the normal way to use this; run it directly when you want no model in the loop.`
 
 function parseFlags(argv) {
-  const out = { cwd: process.cwd(), fileName: 'delivery.json', boardFile: 'delivery-board.html', rest: [] }
+  const out = { cwd: process.cwd(), fileName: 'delivery.json', boardFile: 'delivery-board.html', actor: '', rest: [] }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--cwd' || arg === '-C') { out.cwd = path.resolve(argv[++i] ?? ''); continue }
     if (arg === '--file' || arg === '-f') { out.fileName = argv[++i] ?? out.fileName; continue }
     if (arg === '--board-file') { out.boardFile = argv[++i] ?? out.boardFile; continue }
+    if (arg === '--actor' || arg === '-a') { out.actor = argv[++i] ?? ''; continue }
     if (arg === '--help' || arg === '-h') { out.help = true; continue }
     if (arg === '--version' || arg === '-v') { out.version = true; continue }
     out.rest.push(arg)
   }
   return out
+}
+
+/** Explicit flag > DELIVERY_ACTOR > git config user.name > empty. */
+function resolveActor(explicit, cwd) {
+  if (explicit && explicit.trim()) return explicit.trim()
+  const fromEnv = (process.env.DELIVERY_ACTOR ?? '').trim()
+  if (fromEnv) return fromEnv
+  try {
+    const name = execFileSync('git', ['config', 'user.name'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    return name || ''
+  } catch {
+    return ''
+  }
 }
 
 async function main() {
@@ -62,16 +82,19 @@ async function main() {
 
   if (flags.help || flags.rest.length === 0) {
     process.stdout.write(usage)
-    if (flags.help || flags.rest[0] === 'help') {
-      process.stdout.write(`\n${commandHelp.replaceAll('/delivery-admin', 'dsh-delivery-board')}\n`)
-    }
+    if (flags.help || flags.rest[0] === 'help') process.stdout.write(`\n${commandHelp}\n`)
     return
   }
 
+  const actor = resolveActor(flags.actor, flags.cwd)
+  // The board copies commands that work from any directory, so it renders this exact script path.
+  const command = `node ${fileURLToPath(import.meta.url)}`
   const session = createStandaloneSession({
     cwd: flags.cwd,
     fileName: flags.fileName,
     boardFile: flags.boardFile,
+    actor,
+    command,
   })
 
   try {

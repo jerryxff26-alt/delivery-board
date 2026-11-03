@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createProject, addCard, archiveCard, moveCard, appendLog, resolveLog, setStageHidden } from '../lib/delivery.js'
+import { createProject, addCard, archiveCard, moveCard, appendLog, resolveLog, setStageHidden, renderBoard } from '../lib/delivery.js'
 import { renderBoardHtml } from '../lib/board-html.js'
 import { formatTimestamp, renderColumns, renderArchive, renderRisks, renderCardDetail, boardStrings } from '../lib/board-view.js'
 
@@ -93,7 +93,7 @@ test('offline snapshots are visibly read-only and live boards prioritize drag ov
   assert.match(live, /aria-label="Edit c1"/)
   assert.match(live, /aria-live="polite"/)
   assert.match(live, /cursor: grab/)
-  assert.match(live, /Board drag-and-drop/)
+  assert.doesNotMatch(live, /Board drag-and-drop/)
   assert.match(live, /aria-label="Card stage"/)
   assert.doesNotMatch(live.split('<script>')[0], /Live local board|Drag a card into another stage/)
   // Stage moves on the card face use drag; no prominent per-card Move-to dropdown.
@@ -109,8 +109,8 @@ test('live board client wires pointer drag handlers and editor stage fallback', 
   assert.match(live, /addEventListener\('dragover'/)
   assert.match(live, /addEventListener\('drop'/)
   assert.match(live, /addEventListener\('dragend'/)
-  assert.match(live, /note: 'Board drag-and-drop'/)
-  assert.match(live, /note: 'Board card editor'/)
+  assert.match(live, /save\('update', \{ card_id: editingId, \.\.\.fields, stage \}\)/)
+  assert.doesNotMatch(live, /note: 'Board card editor'/)
   assert.match(live, /classList\.add\('drag-over'\)/)
   assert.match(live, /classList\.add\('dragging'\)/)
 })
@@ -368,7 +368,8 @@ test('cards show muted DoD progress and detail lists checkable items', () => {
   })
   const live = renderBoardHtml(state, { endpoint: '/board/test', revision: 'revision', locale: 'zh-CN' })
   const body = live.split('<script>')[0]
-  assert.match(body, /class="dod-progress">1\/2</)
+  assert.match(body, /class="dod-progress" title="完成定义 1\/2"/)
+  assert.match(body, /class="card-dod"/)
   assert.match(body, /name="start"/)
   const detail = renderCardDetail(state.cards[0], state, boardStrings('zh-CN'), { canEdit: true })
   assert.match(detail, /开始/)
@@ -411,4 +412,46 @@ test('detail history localizes auto handoff/decision text; legacy English still 
   const archZh = renderCardDetail(state.cards[0], state, boardStrings('zh'), { canEdit: false })
   assert.match(archZh, /「会员积分兑换页」已归档/)
   assert.doesNotMatch(archZh, /"会员积分兑换页" archived/)
+})
+
+test('cards on a removed stage stay visible in a fallback column and the text board', () => {
+  const state = sampleState()
+  const ghost = { ...state.cards[0], id: 'c9', title: 'Ghost work', stage: 'retired' }
+  const withGhost = { ...state, cards: [...state.cards, ghost] }
+  const body = renderBoardHtml(withGhost).split('<script>')[0]
+  assert.match(body, /class="col col-orphan"/)
+  assert.match(body, /Ghost work/)
+  assert.match(body, /Stage removed/)
+  assert.match(body, /data-card-id="c9" draggable="false"/)
+  assert.match(renderBoard(withGhost), /## Stage removed · 1/)
+  assert.match(renderBoard(withGhost), /\[c9\] Ghost work/)
+})
+
+test('every open risk renders, not only the newest eight', () => {
+  let state = createProject({ customer: 'Risks', template: 'lite' })
+  for (let i = 0; i < 11; i += 1) state = appendLog(state, { type: 'risk', text: `Risk ${i}` })
+  const html = renderRisks(state, true, boardStrings('en'))
+  assert.match(html, /Risk 0/)
+  assert.match(html, /Risk 10/)
+  assert.equal((html.match(/<li /g) ?? []).length, 11)
+})
+
+test('zh board localizes dialogs, template name and per-column add', () => {
+  const state = createProject({ customer: 'X', template: 'lite' })
+  const body = renderBoardHtml(state, { endpoint: '/board/test', revision: 'revision', locale: 'zh-CN' }).split('<script>')[0]
+  assert.match(body, /轻量流水线/)
+  assert.match(body, /验收标准（每行一条）/)
+  assert.match(body, /完成定义（每行一条）/)
+  assert.match(body, /记录风险 \/ 阻塞/)
+  assert.match(body, /data-action="new-card" data-stage-id="backlog"/)
+  assert.doesNotMatch(body, /Acceptance criteria \(one per line\)|Log risk \/ blocker/)
+})
+
+test('handoff history shows who made the change', () => {
+  let state = createProject({ customer: 'Actor', template: 'lite' })
+  state = addCard(state, { title: 'API', stage: 'doing' })
+  state = moveCard(state, { cardId: 'c1', toStage: 'review', actor: 'Ada' })
+  const detail = renderCardDetail(state.cards[0], state, boardStrings('en'), { canEdit: false })
+  assert.match(detail, /class="detail-actor">Ada</)
+  assert.match(detail, /moved from Doing → Review/)
 })

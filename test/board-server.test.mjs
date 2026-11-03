@@ -470,7 +470,7 @@ test('live board can tick DoD items with revision guards', async () => {
   assert.match(f.getState().cards[0].dod[0].doneAt, /^\d{4}-\d{2}-\d{2}T/)
   const page = await f.call({ path: '/board/secret' })
   assert.match(page.text, /data-action="dod-check"/)
-  assert.match(page.text.split('<script>')[0], /class="dod-progress">1\/1</)
+  assert.match(page.text.split('<script>')[0], /class="dod-progress" title="DoD 1\/1"/)
 })
 
 test('live board archive_board writes snapshot then resets', async () => {

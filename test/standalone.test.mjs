@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createStandaloneSession } from '../lib/standalone.js'
 
-const cli = path.join(path.dirname(fileURLToPath(import.meta.url)), '../bin/dsh-delivery-board.js')
+const cli = path.join(path.dirname(fileURLToPath(import.meta.url)), '../scripts/delivery.mjs')
 
 async function withTemp(run) {
   const dir = await mkdtemp(path.join(tmpdir(), 'dsh-cli-'))

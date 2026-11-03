@@ -2,254 +2,113 @@
 
 [English](README.md) · [中文](README.zh.md)
 
-> **计划、负责人、状态与交接历史，落在代码旁的一份 JSON** — 无 SaaS、无账号；随 PR 一起审阅。
+> **计划、负责人、状态与交接历史，落在代码旁的一份 `delivery.json`** — 无 SaaS、无账号、无插件；随 PR 一起审阅。
 
-看板只是视图。PM 与研发真正信任的是同一份 `delivery.json`：阶段、WIP、周报，以及真实发生过的交接审计——管理侧与交付侧对齐同一上下文，跟着仓库一起版本化。
+看板只是视图。PM 和工程师信任同一份文件：阶段、WIP、客户周报，以及真实发生过的移动记录。团队和他们的 agent 共用一份跟着仓库走的状态。
 
-![虚构演示：阶段看板 → 拖拽交接 → 日历时间线 → 深色模式 → 安装](docs/demo/demo.gif)
+![演示：阶段看板 → 拖拽交接 → 日历时间线 → 深色模式](docs/demo/demo.gif)
 
-*约 22 秒无声演示（v0.3.0 界面 · 英文叠字 · 虚构数据）。需要下载可看 [MP4](docs/demo/demo.mp4)。*
+## 它是什么
 
-## 30 秒快速开始
+一个仓库，零依赖：
 
-**独立 CLI（无需 DeepSeek Harness）：**
+- `SKILL.md` — agent 怎么用它（计划 → 建卡 → 交接 → 汇报）
+- `scripts/delivery.mjs` — 唯一入口：确定性写入、周报、本地看板
+- `lib/` — 领域规则（卡号、交接历史、DoD、归档）与看板渲染
+- `test/` — 回归测试
 
-在 npm 上架之前，请用 GitHub 安装路径：
-
-```bash
-npx github:jerryxff26-alt/delivery-board init ACME lite
-npx github:jerryxff26-alt/delivery-board card '{"title":"API integration","stage":"doing","owner":"Ada"}'
-npx github:jerryxff26-alt/delivery-board open    # 本机看板 + Timeline；Ctrl+C 结束
-npx github:jerryxff26-alt/delivery-board weekly
-```
-
-| 路径 | 命令 |
-| --- | --- |
-| 独立运行（现在可用） | `npx github:jerryxff26-alt/delivery-board …` |
-| 独立运行（npm 上架后） | `npx dsh-delivery-board …` |
-| DSH 插件 | `dsh plugin --profile web add github:jerryxff26-alt/delivery-board` |
-
-**作为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）插件**（`/delivery` skill 工作流）：
+安装就是把一个 skill 目录指向这个仓库：
 
 ```bash
-dsh plugin --profile web add github:jerryxff26-alt/delivery-board
+git clone https://github.com/jerryxff26-alt/delivery-board.git ~/git-repo/dsh-delivery-board
+ln -s ~/git-repo/dsh-delivery-board ~/.agents/skills/delivery   # 或 <项目>/.agents/skills/delivery
 ```
 
-桌面版：在插件管理中安装同一个 GitHub 来源。（上面的 CLI 安装路径已验证；桌面插件管理流程未单独验证。）已在 DSH **0.2.1-rc.2** 测试（亦兼容 **0.2.0-rc.2**），无运行时依赖。
+之后要么在 DeepSeek Harness 里输入 `/delivery …`（skill 会把指令加载给模型），要么直接自己跑脚本，不经过模型。
 
-## 为什么存在
+## 30 秒上手
 
-从 Plan 到需求、设计、开发、测试再到上线，交付状态如果和代码不在一起，人和 Agent 就很难对齐：谁负责、怎样算完成、哪里卡住，往往散落在交接和口头同步里。
+```bash
+alias delivery="node ~/git-repo/dsh-delivery-board/scripts/delivery.mjs"
 
-**dsh-delivery-board** 把阶段流水线、交接留痕和客户周报写入仓库内的交付状态（默认 `delivery.json`）。看板、日历 Timeline、审计与周报只是同一份状态的不同视图，不是另一套 SaaS。PM、研发、测试和 AI agent 共用同一个、能跟着仓库走的 Source of Truth。
+cd your-project
+delivery init ACME lite
+delivery card '{"title":"API integration","stage":"doing","owner":"Ada","description":"Wire partner API"}'
+delivery board
+delivery open        # 本地看板 + 时间线，Ctrl+C 退出
+delivery weekly
+```
 
-## 和其他方案比
+状态默认写在当前目录的 `delivery.json`（用 `--cwd` / `--file` 覆盖）。
 
-| 需求 | 本项目 | 常见 SaaS 看板 | 仅 Markdown 清单 |
-| --- | --- | --- | --- |
-| 落在 git 仓库里 | 是（`delivery.json`） | 多为远程工作区 | 是，但缺少结构化交接 / WIP |
-| 交接审计 + 客户周报 | 内置 | 需自定义字段 / 导出 | 手工 |
-| 本地可编辑 UI + Timeline | 本机环回看板 | 完整 Web 应用 | 无 |
-| 配合 AI coding agent | DSH skill + 工具；任意 shell 可用 CLI | 多经 API / MCP | 仅靠提示词 |
-| 范围 | 单仓库交付上下文 | 组织级 PM 套件 | 轻量笔记 |
+## 包含什么
 
-刻意**不是**重造 Jira、Linear 或 Notion——那些适合组织级规划。这里只保留当前仓库真正需要的交付上下文，可离线、可在 PR 里审阅。
+- **阶段流水线与卡片** — 负责人、可选描述、`start`/`due`、验收标准与可勾选的 DoD。阶段可在初始化后增删改（有卡片时必须先迁移）。
+- **交接审计** — 移动卡片会记录谁把什么交给了谁，并写入操作者（`--actor`，其次 `DELIVERY_ACTOR`，最后 `git config user.name`）。
+- **周报** — 给客户的 Markdown：流水线快照、已交付、交接、未关闭风险、本周已消化风险，可选下周投注。
+- **软 WIP 上限** — 阶段可选 `wipLimit`；看板只提示，从不拦截移动。
+- **本地看板** — 拖拽、归档/恢复、风险记录、卡片级 DoD、键盘可用（Tab 聚焦卡片、回车打开），中英文界面。
+- **时间线视图** — 只用现有数据推导的日历轴甘特图。
+- **整板归档** — 快照到 `delivery-archive/<日期>-<slug>.json`，然后重置为空板并保留流水线。
+- **离线 HTML** — 一个只读文件，没有工具的人也能打开看。
 
-如果它帮你少开一次对齐会、少贴一次凌乱周报，点一颗 [⭐ star](https://github.com/jerryxff26-alt/delivery-board) 能让更多人发现它——谢谢。
+![可编辑看板全宽视图](docs/screenshots/board.jpg)
 
-## 设计原则
-
-- **Delivery state 是一等公民**：阶段、负责人、验收标准（AC）、完成定义（DoD）、交接与阻塞，都留在仓库里，跟随 Git 演进。
-- **视图解耦**：本地看板、交接审计、客户周报、离线 HTML，都是同一份交付状态的 Projection。
-- **用 CLI 或 DSH 操作**：用 `npx github:jerryxff26-alt/delivery-board …`（npm 上架后也可用 `npx dsh-delivery-board …`）、`/delivery` 或自然语言推进阶段、补 AC、记阻塞、出周报；不必把 JSON 当成日常手工编辑界面。
-- **边界清晰**：不重造企业级项目管理平台，只把当前仓库交付真正需要的上下文留在 codebase 里。
-
-## 你能得到什么
-
-- **阶段流水线 + 卡片**：每张卡有负责人、可选描述、可选 `start`/`due` 日期、验收标准和可勾选的完成定义（DoD）清单。初始化后仍可增删改阶段（删除时若该阶段仍有卡片，需先 `migrate_to` 迁走）。
-- **交接审计**：卡片跨阶段移动时自动记录交接（谁、从哪到哪、备注）。
-- **周报**：生成 Markdown 客户周报：流水线快照、**本周已交付**（进入末级阶段或归档）、交接、未关闭风险，以及**本周已消化风险**。可选 `next_week` 笔记会输出为 **Next bets（下周投注）**；为空则省略。
-- **软 WIP 上限**：阶段可选 `wipLimit`（看板风格）。看板与移动反馈会提示超限，但**从不拦截**移动。
-- **本地可编辑看板**：`/delivery Open the editable board` 在 `127.0.0.1` 上提供鼠标拖拽看板，保存回同一份交付状态；归档/恢复、风险/阻塞记录，以及卡片上的 DoD 勾选清单均可在看板操作。无障碍回退：编辑卡片里的 Stage。看板界面文案会跟随浏览器语言（中文环境优先 zh-CN）。
-- **整板归档**：`archive-board` 将当前状态（卡片、日志、风险）写入同目录 `delivery-archive/<YYYY-MM-DD>-<slug>.json`，再把 `delivery.json` 重置为空板（保留流水线/模板/标题）。用 `open --file …` 或 `html --file …` 只读查看归档。
-- **Timeline**：日历轴甘特；同时有 `start` 与 `due` 时画 start→due 条带，仅有 due 时保留 ◆ 标记。
-- **时间线视图**：按真实日历日期展示每张卡片的甘特条（创建 → 各阶段交接 → 上线 / 归档 / 今天）。同时有 `start` 与 `due` 时画 start→due 条带，仅有 due 时保留 ◆ 标记；没有日期的卡片单独列出。与看板共用搜索和负责人筛选，点击标题即可编辑；浅色/深色主题跟随系统。
-- **离线 HTML 快照**：单个只读文件，没装 DSH 的同事也能打开。
-
-![宽屏简洁四列看板（Lite：Backlog→Live，虚构 ACME 卡片）](docs/screenshots/board.jpg)
-
-![时间线视图：按日历轴展示各卡片阶段色条，含今天标线、周/月网格线、截止与上线标记](docs/screenshots/timeline.jpg)
+![时间线视图：按阶段着色的日历轴条形](docs/screenshots/timeline.jpg)
 
 <details>
-<summary>卡片编辑、归档与深色模式</summary>
+<summary>卡片编辑器、归档与深色模式</summary>
 
-![深色模式下的中文时间线视图](docs/screenshots/timeline-dark-zh.jpg)
+![深色模式、中文界面的时间线视图](docs/screenshots/timeline-dark-zh.jpg)
 
-![卡片编辑：标题、负责人、截止日期、阶段、验收标准与完成定义](docs/screenshots/card-editor.jpg)
+![卡片编辑器：标题、负责人、截止日期、阶段、验收标准与完成定义](docs/screenshots/card-editor.jpg)
 
-![归档视图：保留卡片详情与恢复到原阶段按钮](docs/screenshots/archive.jpg)
+![归档视图：保留卡片细节，可恢复到原阶段](docs/screenshots/archive.jpg)
 
 </details>
 
-## 独立 CLI
+## 日常循环
 
-与插件共用同一套领域能力（阶段、交接、软 WIP、周报、本地看板 + Timeline）。默认在当前目录读写 `delivery.json`（可用 `--cwd` / `--file` 覆盖）。
-
-```bash
-npx github:jerryxff26-alt/delivery-board help
-npx github:jerryxff26-alt/delivery-board init Demo lite
-npx github:jerryxff26-alt/delivery-board board
-npx github:jerryxff26-alt/delivery-board open
-npx github:jerryxff26-alt/delivery-board weekly 2026-10-20
-npx github:jerryxff26-alt/delivery-board html
-npx github:jerryxff26-alt/delivery-board dod add c1 "PR 已审"
-npx github:jerryxff26-alt/delivery-board dod check c1 0
-npx github:jerryxff26-alt/delivery-board archive-board
-npx github:jerryxff26-alt/delivery-board open --file delivery-archive/2026-11-02-demo.json
-```
-
-npm 上架后，同样命令可写成 `npx dsh-delivery-board …`。
-
-命令形态与 DSH 插件里的 `/delivery-admin` 一致。`open` 会保持进程直到 Ctrl+C。
-
-## DSH 插件快速开始
-
-```bash
-dsh plugin --profile web add github:jerryxff26-alt/delivery-board
-```
-
-### 日常只做这些（主路径）
-
-1. **初始化** — `lite` 模板（或 `/delivery Initialize a lite board for ACME`）
-2. **建卡** — 可观察结果 + 阶段
-3. **交接** — `move` / 拖拽看板
-4. **周报 / 开看板** — `weekly` / `open`
-
-`/delivery` = 模型 skill（日常主入口）。`/delivery-admin` = 不经模型的确定性逃生舱。日常优先 `/delivery`。
-
-**安静看板 / 可日常使用（v0.3.0）：** 打磨冻结。触控仅在 `hover: none` 下显示安静常驻 ⋯ 浮层；桌面仍悬停才出现。Timeline / Archive / 编辑器与近黑·8px·细边语言对齐。归档卡与活动卡同 chrome（标题+元信息；Restore 在 ⋯ 内）。交接审计**只记录真实阶段移动**（A→C 一行；有意跳过的中间阶段不另记）。
-
-**标题+元信息卡片（v0.2.7）：** 看板卡片静止时只显示标题与元信息（负责人/截止/阻塞），不再预留 ID/拖拽/⋯ 顶栏。⋯ 菜单为悬停/聚焦时的绝对浮层；拖拽靠 grab 光标，ID 只留在 aria/编辑/复制。触控截图不再强制露出 chrome。仍无 CDN 字体、无新依赖。
-
-**安静高端 UI（v0.2.6）：** 近黑 Linear 风主按钮（去掉 SaaS 紫）、更扁的 8px 细边卡片、分段控件仅 Active/Timeline/Archive、保存态只留 Saved、副标题缩短为模板·N cards、阻塞改为 meta/左边线、Risks 默认折叠。
-
-**更克制的看板 UI（v0.2.4）：** 更柔和的配色、细而克制的阶段色条、卡片更疏、AC/DoD 默认收成芯片、Edit/Archive/Copy 藏进 ⋯ 菜单。
-
-**少一点摩擦（v0.2.3）：** 阶段/卡片可用 **id 或名称/标题**（不区分大小写，须唯一；报错列候选项）。支持位置参数：`init ACME lite`、`card API doing Ada`、`move API review`。看板闸门与审计默认折叠；未关闭风险保持可见。
-
-然后在会话里：
-
-```text
-/delivery Initialize a lite delivery board for ACME
-/delivery Open the editable board
-```
-
-高级、确定性命令：`/delivery-admin help`。
-
-## Skill 与工具
-
-`/delivery` skill 会先读仓库上下文、找缺口，再提出阶段与卡片方案；得到确认后才通过 `delivery_*` 工具写入。**模型负责推理；工具负责落盘。**
-
-| 模板 | 阶段 |
+| 意图 | 命令 |
 |---|---|
-| **`lite`（轻量流水线）** — 推荐快速开始 | Backlog → Doing → Review → Live |
-| `default`（ToB 交付流水线） | Client Requirements → BA Analysis → TL Design → Development → Testing → DevSecOps Launch → Live |
-| `governance`（治理型交付流水线） | Plan → Analyze → Design → Build → Test → Deploy → Live |
+| 初始化（一次） | `init ACME lite` |
+| 新建卡片 | `card '{"title":"API","stage":"doing","owner":"Ada","due":"2026-11-20"}'` |
+| 交接 | `move c1 review` |
+| 编辑但不移动 | `update '{"card_id":"c1","stage":"review","owner":"Bo"}'` |
+| 记录进展 / 风险 / 阻塞 | `log '{"type":"blocker","text":"Waiting for UAT","card_id":"c1"}'` |
+| 看一眼 | `board [--archived]` |
+| 可编辑看板 | `open` |
+| 周报 | `weekly 2026-11-02` |
 
-可通过 `stages` 参数完全自定义阶段。旧文件若仍含阶段 `gates` / `gateDone`，加载时会静默丢弃。除非明确需要更长的 ToB / 治理流水线，优先用 `lite`。
+`delivery --help` 会列出全部命令，包括 DoD、阶段维护、归档和 HTML 导出。
 
-## 工具
+卡片和阶段可以用 id 或完全匹配的标题/名称引用；找不到或有歧义时会列出候选，而不是猜。
 
-**日常环**（优先用这些）：
+## 看板
 
-| 工具 | 作用 |
-|---|---|
-| `delivery_init` | 初始化（优先 `lite`；或 `default` / `governance` / 自定义阶段） |
-| `delivery_card` | 新增卡片（可选 start/due、描述、AC、DoD 清单） |
-| `delivery_move` | 跨阶段移动并记录交接；同阶段只改负责人时记为决策 |
-| `delivery_board` | 文本看板 |
-| `delivery_open` | 本地可编辑看板 URL |
-| `delivery_update` | 修改卡片信息（含 start/due、描述、DoD；不移动） |
-| `delivery_log` | 记录进展 / 风险 / 阻塞 / 决策 |
-| `delivery_weekly` | 客户周报（Markdown）：已交付 / 交接 / 风险 / Next bets |
+`open` 绑定 `127.0.0.1` 的随机端口和不可猜测路径，并打印 URL。进程用 Ctrl+C 结束；把它当作本机私有的东西。看板改的是同一份 `delivery.json`，写入走和脚本同一套规则，所以历史和卡号保持一致。
 
-**高级**（仍注册；仅在明确需要时用）：
+## 团队协作
 
-| 工具 | 作用 |
-|---|---|
-| `delivery_archive` / `delivery_restore` | 归档 / 恢复到原阶段 |
-| `delivery_archive_board` | 整板快照到 `delivery-archive/…` 后重置空板（保留流水线） |
-| `delivery_dod_add` / `delivery_dod_check` | 追加 DoD 清单项 / 勾选或取消（不拦截移动） |
-| `delivery_board_html` | 只读离线 HTML 快照 |
-| `delivery_resolve` | 按 logs 下标将未关闭的风险/阻塞标记为已解决 |
-| `delivery_stage_add` / `delivery_stage_update` / `delivery_stage_remove` | 初始化后演进流水线（有卡片时删除需 `migrate_to`；阶段可设软 `wip_limit`） |
-
-## 团队协作与安全
-
-- 交付状态默认落盘为仓库内文件（默认名 `delivery.json`，可配置），提交到团队共享 git 仓库后 `git pull/push` 即可同步；并发修改仍需正常解决冲突。
-- 本地看板只绑定 `127.0.0.1`、随机端口和不可猜测的路径；URL 仅限本机使用，DSH 退出或插件卸载后失效。
-- 页面数据过期时不会静默覆盖，需要点 **Refresh** 后重试。
+把 `delivery.json` 提交到团队仓库，`git pull` / `git push` 就是同步。别人先写过文件时，过期的写入会被拒绝（"file changed since read"）——重新读一遍，只重试还需要做的那部分。已提交的冲突交给 git；版本守卫负责拦住对未提交编辑的静默覆盖。
 
 ## 开发
 
 ```bash
-npm install
-npm run check
-npm test               # 领域、HTML、命令、存储、HTTP、插件与 skill 测试
-npm run test:desktop   # 可选：再加桌面 SDK 上的 skill 注册/加载测试
+git clone … && cd dsh-delivery-board
+npm run check     # 检查 scripts/ 与 lib/ 的语法
+npm test          # 135 项领域、看板、HTTP 与 CLI 测试
 ```
 
-本地桌面开发（macOS，已在 DSH 0.2.1-rc.2 验证）：
+无运行时和构建依赖；需要 Node ≥ 20。
 
-```bash
-DSH_CLI="/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"
-"$DSH_CLI" plugin --profile desktop add "link:$PWD" --offline --ignore-scripts
-```
+## 边界
 
-安装或改动 link 插件后请完全退出并重开 DSH，确认 **Plugins → dsh-delivery-board** 为 **Running**。`--dump-config` 适用于 CLI 管理的 profile（如 `web`），不适用于 desktop profile。若应用路径不同，可设 `DSH_DESKTOP_APP`。
+- 不是项目管理套件：没有云端、账号、通知、项目集汇总或实时多人同步。
+- WIP 上限和 DoD 都是软信号，都不拦截移动。
+- 看板是单机本地工具；真正共享的是那份 JSON。
+- 拖拽在本地浏览器里验证过；卡片支持键盘聚焦，但不宣称完整的移动端或 WCAG 合规。
 
-### 实现说明
-
-- 插件契约 `name / inject / Config / apply`；工具经 `defineTool`；捆绑的 `skills/delivery/SKILL.md` 经 `ctx.skills.register` 注册。工具输出渲染为 `ContentBlock[]`。
-- 领域逻辑（`lib/delivery.js`）与 HTML 渲染（`lib/board-html.js`）为纯函数；写入都走 `lib/store.js`。DSH 插件使用 `ctx.fs`；独立 CLI 通过 `lib/node-fs.js` + `lib/standalone.js` 使用同一套 store 契约。
-- 周报覆盖从 `week_start` 起连续七个本地日历日（默认本周一）。**本周已交付** = 该窗口内进入末级阶段的交接，或归档；未关闭风险单独列出；**本周已消化风险**按窗口内的 `resolvedAt`。`next_week` 有内容时输出 **Next bets** 节。
-- 每张卡的 **DoD** 为可勾选清单（`{text, done, doneBy?, doneAt?}`）；勾选**不**拦截移动。旧版字符串 DoD 会在加载时迁移。
-- 软 **WIP 上限**（`wipLimit` / 工具字段 `wip_limit`）为阶段可选项；超限只在看板与移动反馈中警告，从不拒绝移动。
-- 初始化后可用工具或 `/delivery-admin` 增删改阶段；删除仍有卡片的阶段必须提供 `migrate_to`。
-- HTML 中用户内容均转义（有测试覆盖）。
-
-## 实践说明（轻量）
-
-从适合「仓库内看板」的交付实践里挑了能落地、又不做成重型 PM 套件的两点：
-
-- **看板软 WIP**：给忙碌阶段设 `wip_limit`，超载一眼可见。
-- **周报 shipped / next bets**：带一点 Shape Up 味道——本周落地了什么、消化了什么风险、下周押什么（仍然只是 Markdown + 仓库内状态）。
-
-## 不做清单（Won't build）
-
-硬产品边界——本项目保持「本地 / 仓内交付看板」：
-
-- 硬拦截 DoD 或硬 WIP（不做流程引擎）
-- 多项目 / 多 workspace 汇总或组织级 portfolio
-- 云端通知、邮件/IM 推送、账号与 SSO
-- 自定义字段泛滥 / 多种 issue type 体系
-- Dual Track 发现↔交付、DoR、appetite 等「方法论模块」对外产品化
-- 实时多人 CRDT 协同、甘特资源负载、燃尽图套件
-- 把每个 admin 子命令都升成一级 Agent 工具
-
-## 可能以后做（非对外承诺）
-
-- 把可编辑看板嵌进 DSH（独立 CLI 已发布）
-- 周报与工具消息的更完整 i18n（看板界面已跟随浏览器语言）
-
-## 已知限制
-
-- **独立 CLI** 只需 Node ≥20（现在用 `npx github:jerryxff26-alt/delivery-board`；npm 上架后可用 `npx dsh-delivery-board`）。DSH 插件路径为开发者预览：`engines.dsh >=0.2.0-rc.2 <0.3.0`；peers `@deepseek-ai/dsh-tools >=0.2.0-rc.2 <0.3.0`、`@deepseek-ai/schemastery ~3.18.5`（由宿主提供，optional）。已在 DSH 0.2.1-rc.2 冒烟验证；此前在 0.2.0-rc.2 验证过。
-- 无完整甘特资源排期、硬拦截 DoD/WIP，或实时多用户同步。整板归档是有意的快照+重置，不是自动批量归档。
-- 拖拽（以及编辑 → 阶段回退）在本地浏览器 harness 中检查过；不做完整键盘/移动端/WCAG 声明。
-- DoD 清单与 WIP 上限只是软信号；移动卡片不要求 DoD 全部勾选，也不要求 WIP 未超限。
-- 空列与未初始化项目只指向**一个**下一步（`init` / `delivery_init` / `/delivery …`，或看板上的「新建卡片」）。
-
-## 许可证
+## License
 
 [MIT](LICENSE) © 2026 jerryxff26-alt

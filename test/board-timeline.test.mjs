@@ -116,9 +116,9 @@ test('columns over a WIP limit show a quiet warn-only note (no screaming badge)'
   s = addCard(s, { title: 'Two', stage: 'doing' })
   const ui = { interactive: true, query: '', owner: '', limits: {}, strings: boardStrings('en-US') }
   const html = renderColumns(s, ui)
-  assert.match(html, /class="wip-note"/)
+  assert.match(html, /class="wip-note/)
   assert.match(html, /Over WIP/)
-  assert.equal((html.match(/class="wip-note"/g) ?? []).length, 1)
+  assert.equal((html.match(/class="wip-note/g) ?? []).length, 1)
   // Quiet columns / timeline: no per-stage rainbow style attribute
   assert.doesNotMatch(html, /style="--stage:/)
 })
