@@ -241,7 +241,7 @@ class FakeServer extends EventEmitter {
   async request(url, { method = 'GET', body } = {}) {
     const parsed = new URL(url)
     const req = Object.assign(Readable.from(body === undefined ? [] : [JSON.stringify(body)]), {
-      method, url: parsed.pathname,
+      method, url: parsed.pathname + parsed.search,
       headers: { host: parsed.host, origin: parsed.origin, 'content-type': 'application/json' },
     })
     const completed = deferred()
@@ -254,7 +254,7 @@ class FakeServer extends EventEmitter {
   }
 }
 
-function managerFixture(options = {}) {
+function managerFixture(serverOptions = {}, managerOptions = {}) {
   const files = new Map()
   for (const [path, customer] of [['/workspace-a/delivery.json', 'Workspace A'], ['/workspace-b/delivery.json', 'Workspace B'], ['/workspace-a/other.json', 'Other file']]) {
     const state = addCard(createProject({ customer, template: 'governance' }), { title: 'SSO', stage: 'analyze', owner: 'Alice' })
@@ -284,14 +284,47 @@ function managerFixture(options = {}) {
       },
     },
   }
-  const manager = createBoardManager(ctx, config, { createServer(handler) {
-    const server = new FakeServer(handler, options, 12345 + servers.length)
+  const manager = createBoardManager(ctx, config, { ...managerOptions, createServer(handler) {
+    const server = new FakeServer(handler, serverOptions, 12345 + servers.length)
     servers.push(server)
     created.resolve(server)
     return server
   } })
   return { ctx, exec, controller, config, manager, servers, created, observed, resolved, writes, dispose: () => dispose(), state: (path) => JSON.parse(files.get(path).text) }
 }
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+test('an idle board shuts itself down and resolves exit', async () => {
+  const f = managerFixture({}, { idleMs: 150 })
+  await f.manager.open(f.exec)
+  await Promise.race([f.manager.exit, delay(3000)])
+  assert.equal(f.servers[0].closeCalls, 1)
+  await f.dispose()
+})
+
+test('closing the last browser tab shuts the board down after the grace period', async () => {
+  const f = managerFixture({}, { byeGraceMs: 60 })
+  const url = await f.manager.open(f.exec)
+  await f.servers[0].request(`${url}/bye?tab=a`, { method: 'POST' })
+  await Promise.race([f.manager.exit, delay(3000)])
+  assert.equal(f.servers[0].closeCalls, 1)
+  await f.dispose()
+})
+
+test('one closed tab does not stop a board another tab still uses', async () => {
+  const f = managerFixture({}, { byeGraceMs: 80 })
+  const url = await f.manager.open(f.exec)
+  await f.servers[0].request(`${url}/alive?tab=a`)
+  await f.servers[0].request(`${url}/alive?tab=b`)
+  await f.servers[0].request(`${url}/bye?tab=a`, { method: 'POST' })
+  await delay(250)
+  assert.equal(f.servers[0].closeCalls, 0)
+  await f.servers[0].request(`${url}/bye?tab=b`, { method: 'POST' })
+  await Promise.race([f.manager.exit, delay(3000)])
+  assert.equal(f.servers[0].closeCalls, 1)
+  await f.dispose()
+})
 
 test('manager requires a string session cwd before touching the filesystem', async () => {
   const f = managerFixture()

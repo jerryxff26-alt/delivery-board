@@ -86,7 +86,9 @@ Card and stage references accept an id or an exact title/name; ambiguous or unkn
 
 ## Board
 
-`open` binds `127.0.0.1` on an ephemeral port with an unguessable path and prints the URL. It stays up until Ctrl+C; treat it as private to your machine. The board edits the same `delivery.json` and writes through the same domain rules as the script, so history and IDs stay consistent either way.
+`open` binds `127.0.0.1` on an ephemeral port with an unguessable path and prints the URL. `--browser` opens it for you; the board then shuts itself down after 20 minutes without activity, or a few seconds after the last tab closes (`--idle 0` keeps it running until Ctrl+C). Treat the URL as private to your machine. The board edits the same `delivery.json` and writes through the same domain rules as the script, so history and IDs stay consistent either way.
+
+`html` writes a single self-contained file. Opened straight from disk it is read-only, but the page also carries **Connect delivery.json**: in Chrome or Edge, pick the file once and the page reads and writes it in place — same rules, same history, no server process left running. The actor recorded for those writes is the one captured when the HTML was generated.
 
 ## Team collaboration
 

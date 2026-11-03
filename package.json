@@ -1,6 +1,6 @@
 {
   "name": "dsh-delivery-board",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Codebase-native delivery board as a skill: stage pipeline, handoff audit, weekly report and a local board, all in one delivery.json.",
   "keywords": [
     "delivery",

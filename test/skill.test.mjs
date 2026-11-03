@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { commandHelp } from '../lib/commands.js'
-import { renderBoardHtml } from '../lib/board-html.js'
+import { renderBoardHtml, inlineDomain } from '../lib/board-html.js'
 import { createProject, addCard } from '../lib/delivery.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -48,4 +48,31 @@ test('the board copies a runnable command when a command prefix is supplied', ()
   assert.match(html, /data-cmd="node \/opt\/delivery\/scripts\/delivery\.mjs move c1 review"/)
   const fallback = renderBoardHtml(state)
   assert.match(fallback, /data-cmd="delivery move c1 review"/)
+})
+
+test('the static page can edit its own file with the same domain code', async () => {
+  const { readFileSync } = await import('node:fs')
+  const vm = await import('node:vm')
+  const source = inlineDomain()
+  assert.match(source, /function applyAction/)
+  assert.doesNotMatch(source, /^import /m)
+  assert.doesNotMatch(source, /^export /m)
+
+  const context = vm.createContext({ structuredClone })
+  vm.runInContext(source, context)
+  const state = context.createProject({ customer: 'Inline', template: 'lite' })
+  const next = context.applyAction(state, 'card', { title: 'API', stage: 'doing' }, { actor: 'Ada' })
+  assert.equal(next.cards[0].id, 'c1')
+  const moved = context.applyAction(next, 'move', { card_id: 'c1', to_stage: 'review' }, { actor: 'Bo' })
+  assert.equal(moved.cards[0].stage, 'review')
+  assert.equal(moved.logs.length, 1)
+  assert.equal(moved.logs[0].type, 'handoff')
+  assert.equal(moved.logs[0].actor, 'Bo')
+
+  const staticHtml = renderBoardHtml(state)
+  assert.match(staticHtml, /id="connect-file"/)
+  assert.match(staticHtml, /function applyAction/)
+  const liveHtml = renderBoardHtml(state, { endpoint: '/board/x', revision: 'r' })
+  assert.doesNotMatch(liveHtml, /function applyAction/)
+  assert.doesNotMatch(liveHtml.split('<script>')[0], /id="connect-file"/)
 })

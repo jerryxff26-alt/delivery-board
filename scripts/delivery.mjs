@@ -2,7 +2,7 @@
 // dsh-delivery-board — single entry point for the delivery skill.
 // Deterministic mutations on an in-repo delivery.json, the weekly report and the local board.
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createStandaloneSession, parseDeliveryCommand, commandHelp } from '../lib/standalone.js'
 
@@ -40,22 +40,41 @@ Options:
   --file, -f <name>    state file name (default delivery.json)
   --board-file <name>  HTML export name (default delivery-board.html)
   --actor, -a <name>   who is making the change (default: $DELIVERY_ACTOR, then git config user.name)
+  --browser            open the board URL in the default browser (open command only)
+  --idle <minutes>     stop the board after this long with no activity (default 20, 0 disables)
+                       the board also stops a few seconds after the last browser tab closes
 
 The skill (SKILL.md) is the normal way to use this; run it directly when you want no model in the loop.`
 
 function parseFlags(argv) {
-  const out = { cwd: process.cwd(), fileName: 'delivery.json', boardFile: 'delivery-board.html', actor: '', rest: [] }
+  const out = { cwd: process.cwd(), fileName: 'delivery.json', boardFile: 'delivery-board.html', actor: '', browser: false, idleMinutes: 20, rest: [] }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--cwd' || arg === '-C') { out.cwd = path.resolve(argv[++i] ?? ''); continue }
     if (arg === '--file' || arg === '-f') { out.fileName = argv[++i] ?? out.fileName; continue }
     if (arg === '--board-file') { out.boardFile = argv[++i] ?? out.boardFile; continue }
     if (arg === '--actor' || arg === '-a') { out.actor = argv[++i] ?? ''; continue }
+    if (arg === '--browser') { out.browser = true; continue }
+    if (arg === '--idle') {
+      const minutes = Number(argv[++i])
+      if (!Number.isFinite(minutes) || minutes < 0) throw new Error('--idle must be a number of minutes (0 disables it)')
+      out.idleMinutes = minutes
+      continue
+    }
     if (arg === '--help' || arg === '-h') { out.help = true; continue }
     if (arg === '--version' || arg === '-v') { out.version = true; continue }
     out.rest.push(arg)
   }
   return out
+}
+
+function openBrowser(url) {
+  const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open'
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url]
+  try {
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+    child.unref()
+  } catch { /* opening a browser is best effort */ }
 }
 
 /** Explicit flag > DELIVERY_ACTOR > git config user.name > empty. */
@@ -95,6 +114,7 @@ async function main() {
     boardFile: flags.boardFile,
     actor,
     command,
+    idleMs: Math.round(flags.idleMinutes * 60000),
   })
 
   try {
@@ -102,13 +122,16 @@ async function main() {
     const result = await session.run(action, args)
     if (result && typeof result === 'object' && result.keepAlive) {
       process.stdout.write(`${result.text}\n`)
+      if (flags.browser && result.url) openBrowser(result.url)
       const stop = async () => {
         try { await result.close() } catch { /* ignore */ }
         process.exit(0)
       }
       process.on('SIGINT', stop)
       process.on('SIGTERM', stop)
-      await new Promise(() => {})
+      // Resolves when the board closed itself (last tab gone, or idle).
+      await result.exit
+      process.exit(0)
     } else {
       process.stdout.write(`${result}\n`)
     }

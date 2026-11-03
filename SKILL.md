@@ -71,8 +71,9 @@ Before a handoff, distinguish available evidence from unmet criteria or missing 
 
 ## Board
 
-- `open` starts a `127.0.0.1` server on an ephemeral port with a random path and prints the URL. It stays up until Ctrl+C. Treat the URL as private to this machine.
+- `open` starts a `127.0.0.1` server on an ephemeral port with a random path and prints the URL. `--browser` opens it, and the board stops itself after 20 minutes without activity or a few seconds after the last tab closes (`--idle 0` keeps it up). Treat the URL as private to this machine.
 - Changes made in the board are attributed to the actor of the process that started it (`--actor`, else `DELIVERY_ACTOR`, else `git config user.name`).
+- `html` writes a static snapshot. Opened from disk it is read-only, but it can connect a `delivery.json` through the browser's file picker and edit it in place with the same rules; the actor is the one captured at generation time.
 
 ## Reporting
 

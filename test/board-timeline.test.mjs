@@ -190,3 +190,18 @@ test('timeline draws schedule bar when start and due are both set', () => {
   assert.match(spanned, /class="tl-sched/)
   assert.doesNotMatch(spanned, /class="tl-due/)
 })
+
+test('timeline stage groups fold away without losing the count', () => {
+  const { s } = timedState()
+  const stageId = s.pipeline[0].id
+  const open = renderTimeline(s, { query: '', owner: '', strings: boardStrings('en'), now: NOW })
+  assert.match(open, /data-group-toggle="/)
+  assert.match(open, /aria-expanded="true"/)
+  assert.doesNotMatch(open, /data-group="[^"]+" hidden/)
+
+  const folded = renderTimeline(s, { query: '', owner: '', strings: boardStrings('en'), now: NOW, collapsed: { [stageId]: true } })
+  assert.match(folded, /class="tl-toggle"[^>]*data-group-toggle="plan"[^>]*aria-expanded="false"/)
+  assert.match(folded, /data-group="plan" hidden/)
+  assert.match(folded, /▸/)
+  assert.match(open, /▾/)
+})

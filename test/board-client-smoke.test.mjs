@@ -24,6 +24,7 @@ function control(value = '') {
     focus() {},
     close() {},
     showModal() {},
+    remove() {},
     querySelector() { return null },
     querySelectorAll() { return [] },
     closest() { return null },
@@ -77,7 +78,7 @@ function makeDocument() {
   }
 }
 
-function bootClient(state, options = {}) {
+function bootClient(state, options = {}, extraGlobals = {}) {
   const html = renderBoardHtml(state, { endpoint: '/board/smoke', revision: 'revision', locale: 'en', ...options })
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1]
   const dom = makeDocument()
@@ -87,6 +88,7 @@ function bootClient(state, options = {}) {
     Element: class Element {},
     console: { error(...args) { throw new Error(`client logged an error: ${args.join(' ')}`) } },
     fetch() { throw new Error('the smoke test does not call the server') },
+    ...extraGlobals,
   })
   new vm.Script(script).runInContext(context)
   return { ...dom, board: () => dom.element('#board').innerHTML, risks: () => dom.element('#risks').innerHTML }
@@ -150,4 +152,26 @@ test('the embedded client boots a zh board and tags the document language', () =
   const html = renderBoardHtml(boardState(), { locale: 'zh-CN' }).split('<script>')[0]
   assert.match(html, /新建卡片/)
   assert.doesNotMatch(html, /Acceptance criteria \(one per line\)/)
+})
+
+test('a static page connects a delivery.json handle and renders its contents', async () => {
+  const state = boardState()
+  let fileText = JSON.stringify({ ...state, customer: 'From file', cards: [{ ...state.cards[0], title: 'Loaded from disk' }] })
+  const writes = []
+  const handle = {
+    name: 'delivery.json',
+    async getFile() { return { name: 'delivery.json', lastModified: 1, async text() { return fileText } } },
+    async createWritable() { return { async write(text) { writes.push(text) }, async close() {} } },
+  }
+  const client = bootClient(state, { endpoint: '' }, {
+    window: { showOpenFilePicker: async () => [handle] },
+  })
+  assert.match(client.element('#board').innerHTML, /Visible card/)
+  await client.fire('#connect-file')
+  assert.match(client.element('#board').innerHTML, /Loaded from disk/)
+  assert.equal(writes.length, 0)
+  // Refresh re-reads the connected handle instead of calling a server.
+  fileText = JSON.stringify({ ...state, cards: [{ ...state.cards[0], title: 'Changed on disk' }] })
+  await client.fire('#refresh')
+  assert.match(client.element('#board').innerHTML, /Changed on disk/)
 })
