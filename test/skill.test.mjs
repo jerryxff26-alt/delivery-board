@@ -16,7 +16,7 @@ test('the repository root is a skill: frontmatter, body and bundled script', () 
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]+)$/.exec(source)
   assert.ok(match, 'SKILL.md needs frontmatter and a body')
   const [, frontmatter, body] = match
-  assert.match(frontmatter, /^name: delivery$/m)
+  assert.match(frontmatter, /^name: delivery-board$/m)
   assert.match(frontmatter, /^description: \S.+$/m)
   assert.doesNotMatch(frontmatter.split('\n').find((line) => line.startsWith('description: ')) ?? '', /\n/)
   assert.ok(body.trim().length > 500)

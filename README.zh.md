@@ -24,7 +24,7 @@ git clone https://github.com/jerryxff26-alt/delivery-board.git ~/git-repo/dsh-de
 ln -s ~/git-repo/dsh-delivery-board ~/.agents/skills/delivery   # 或 <项目>/.agents/skills/delivery
 ```
 
-之后要么在 DeepSeek Harness 里输入 `/delivery …`（skill 会把指令加载给模型），要么直接自己跑脚本，不经过模型。
+之后要么在 DeepSeek Harness 里输入 `/delivery-board …`（skill 会把指令加载给模型），要么直接自己跑脚本，不经过模型。
 
 ## 30 秒上手
 

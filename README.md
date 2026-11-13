@@ -24,7 +24,7 @@ git clone https://github.com/jerryxff26-alt/delivery-board.git ~/git-repo/dsh-de
 ln -s ~/git-repo/dsh-delivery-board ~/.agents/skills/delivery   # or <project>/.agents/skills/delivery
 ```
 
-Then either type `/delivery …` in DeepSeek Harness (the skill loads the instructions for the model), or run the script yourself with no model in the loop.
+Then either type `/delivery-board …` in DeepSeek Harness (the skill loads the instructions for the model), or run the script yourself with no model in the loop.
 
 ## 30-second quickstart
 

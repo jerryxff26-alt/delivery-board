@@ -1,11 +1,11 @@
 ---
-name: delivery
+name: delivery-board
 description: Plan and operate codebase-native delivery using repository requirements and implementation evidence. Use for delivery plans, acceptance criteria, handoffs, blockers, boards and weekly reports, not generic coding without delivery intent.
 ---
 
 # Codebase-native delivery
 
-Turn repository context into an actionable delivery plan, then keep it in `delivery.json` next to the code with the bundled script. `/delivery <request>` loads these instructions into the model; this is not a JSON editor and not a replacement for reading the repository.
+Turn repository context into an actionable delivery plan, then keep it in `delivery.json` next to the code with the bundled script. `/delivery-board <request>` loads these instructions into the model; this is not a JSON editor and not a replacement for reading the repository.
 
 The script is `<skill base directory>/scripts/delivery.mjs`. Run it as `node <that path> <command>`; it resolves the state file from the current directory (`--cwd` / `--file` to override).
 
